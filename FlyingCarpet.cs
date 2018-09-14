@@ -1,4 +1,4 @@
-﻿#define DEBUG
+﻿//#define DEBUG
 using Oxide.Game.Rust.Cui;
 using System;
 using System.Collections.Generic;
@@ -169,33 +169,32 @@ namespace Oxide.Plugins
         object OnOvenToggle(BaseOven oven, BasePlayer player)
         {
             bool rtrn = false; // Must match other plugins with this call to avoid conflicts. QuickSmelt uses false
-
-            BaseEntity lantern = oven as BaseEntity;
-            // Only work on lanterns attached to a Carpet
-            var activecarpet = lantern.GetComponentInParent<CarpetEntity>() ?? null;
-            if (activecarpet == null) return null;
-
-            PrintMsgL(player, "notauthorized");
-
-            if (activecarpet.carpetlock != null && activecarpet.carpetlock.IsLocked()) { PrintMsgL(player, "carpetlocked"); return rtrn; }
-            if (!player.isMounted) return rtrn; // player offline, does not mean ismounted on carpet
-
-            if (player.GetMounted() != activecarpet.entity) return rtrn; // online player not in seat on carpet
-#if DEBUG
-            Puts("OnOvenToggle: Player cycled carpet lantern!");
-#endif
-            if (!activecarpet.FuelCheck())
+            try
             {
-                if (activecarpet.needfuel)
+                var activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
+                if (activecarpet == null) return rtrn;
+
+                if (activecarpet.carpetlock != null && activecarpet.carpetlock.IsLocked()) { PrintMsgL(player, "carpetlocked"); return rtrn; }
+                if (!player.isMounted) return rtrn; // player offline, does not mean ismounted on carpet
+
+                if (player.GetMounted() != activecarpet.entity) return rtrn; // online player not in seat on carpet
+#if DEBUG
+                Puts("OnOvenToggle: Player cycled lantern!");
+#endif
+                if (!activecarpet.FuelCheck())
                 {
-                    PrintMsgL(player, "nofuel");
-                    PrintMsgL(player, "landingcarpet");
-                    activecarpet.engineon = false;
+                    if (activecarpet.needfuel)
+                    {
+                        PrintMsgL(player, "nofuel");
+                        PrintMsgL(player, "landingcarpet");
+                        activecarpet.engineon = false;
+                    }
                 }
+                var ison = activecarpet.engineon;
+                if (ison) { activecarpet.islanding = true; PrintMsgL(player, "landingcarpet"); return null; }
+                if (!ison) { AddPlayerToPilotsList(player); activecarpet.engineon = true; return null; }
             }
-            var ison = activecarpet.engineon;
-            if (ison) { activecarpet.islanding = true; PrintMsgL(player, "landingcarpet"); return null; }
-            if (!ison) { AddPlayerToPilotsList(player); activecarpet.engineon = true; return null; }
+            catch { }
             return null;
         }
 
