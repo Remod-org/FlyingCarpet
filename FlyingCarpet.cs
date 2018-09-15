@@ -379,6 +379,30 @@ namespace Oxide.Plugins
         #endregion
 
         #region Hooks
+        // For NightLantern and others that want to toggle this lantern, potentially
+        private object CanToggleOven(BaseOven oven)
+        {
+            // Only work on lanterns
+            if (oven.ShortPrefabName != "lantern.deployed") return null;
+#if DEBUG
+            Puts("CanToggleOven: Called on a lantern.  Checking for carpet...");
+#endif
+
+            // Only work on lanterns attached to a Carpet
+            BaseEntity lantern = oven as BaseEntity;
+            var activecarpet = lantern.GetComponentInParent<CarpetEntity>() ?? null;
+            if(activecarpet != null)
+            {
+#if DEBUG
+                Puts("CanToggleOven: Do not cycle this lantern!");
+#endif
+                return true;
+            }
+#if DEBUG
+            Puts("CanToggleOven: Not a carpet lantern.");
+#endif
+            return null;
+        }
 
         public bool PilotListContainsPlayer(BasePlayer player)
         {
