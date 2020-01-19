@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.0.6")]
+    [Info("FlyingCarpet", "RFC1920", "1.0.7")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, and lock.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based
     class FlyingCarpet : RustPlugin
@@ -53,12 +53,14 @@ namespace Oxide.Plugins
                 ["helptext3"] = "  type /fcd to destroy your flyingcarpet.",
                 ["helptext4"] = "  type /fcc to show a count of your carpets",
                 ["notauthorized"] = "You don't have permission to do that !!",
+                ["notfound"] = "Could not locate a carpet.  You must be within {0} meters for this!!",
                 ["notflyingcarpet"] = "You are not piloting a flying carpet !!",
                 ["maxcarpets"] = "You have reached the maximum allowed carpets",
                 ["landingcarpet"] = "Carpet landing sequence started !!",
                 ["risingcarpet"] = "Carpet takeoff sequence started !!",
                 ["carpetlocked"] = "You must unlock the Carpet first !!",
                 ["carpetspawned"] = "Flying Carpet spawned!  Don't forget to lock it !!",
+                ["carpetdestroyed"] = "Flying Carpet destroyed !!",
                 ["carpetfuel"] = "You will need fuel to fly.  Do not start without fuel !!",
                 ["carpetnofuel"] = "You have been granted unlimited fly time, no fuel required !!",
                 ["nofuel"] = "You're out of fuel !!",
@@ -75,10 +77,12 @@ namespace Oxide.Plugins
         #region Configuration
 
         bool UseMaxCarpetChecks = true;
+        bool playemptysound = true;
         public int maxcarpets = 1;
         public int vipmaxcarpets = 2;
 
         static float MinAltitude = 5f;
+        static float MinDistance = 10f;
 
         static ulong rugSkinID = 871503616;
         static ulong chairSkinID = 943293895;
@@ -102,6 +106,7 @@ namespace Oxide.Plugins
         private void LoadConfigVariables()
         {
             CheckCfgFloat("Minimum Flight Altitude : ", ref MinAltitude);
+            CheckCfgFloat("Minimum Distance for FCD: ", ref MinDistance);
             CheckCfgFloat("Speed - Normal Flight Speed is : ", ref NormalSpeed);
             CheckCfgFloat("Speed - Sprint Flight Speed is : ", ref SprintSpeed);
 
@@ -109,6 +114,7 @@ namespace Oxide.Plugins
             CheckCfg("Deploy - Limit of Carpets players can build : ", ref maxcarpets);
             CheckCfg("Deploy - Limit of Carpets VIP players can build : ", ref vipmaxcarpets);
             CheckCfg("Require Fuel to Operate : ", ref requirefuel);
+            CheckCfg("Play low fuel sound : ", ref playemptysound);
             CheckCfg("Double Fuel Consumption: ", ref doublefuel);
             CheckCfg("RugSkinID : ", ref rugSkinID);
             CheckCfg("ChairSkinID : ", ref chairSkinID);
@@ -379,7 +385,10 @@ namespace Oxide.Plugins
 #if DEBUG
                 Puts("OnConsumeFuel: sending low fuel warning...");
 #endif
-                Effect.server.Run("assets/bundled/prefabs/fx/well/pump_down.prefab", player.transform.position);
+                if(playemptysound)
+                {
+                    Effect.server.Run("assets/bundled/prefabs/fx/well/pump_down.prefab", player.transform.position);
+                }
                 PrintMsgL(player, "lowfuel");
             }
 
@@ -456,16 +465,23 @@ namespace Oxide.Plugins
         {
             if(player == null) return;
             List<BaseEntity> carpetlist = new List<BaseEntity>();
-            Vis.Entities<BaseEntity>(player.transform.position, 10f, carpetlist);
+            Vis.Entities<BaseEntity>(player.transform.position, MinDistance, carpetlist);
+            bool foundcarpet = false;
 
             foreach(BaseEntity p in carpetlist)
             {
                 var foundent = p.GetComponentInParent<CarpetEntity>() ?? null;
                 if(foundent != null)
                 {
+                    foundcarpet = true;
                     if(foundent.ownerid != player.userID) return;
                     foundent.entity.Kill(BaseNetworkable.DestroyMode.Gib);
+                    PrintMsgL(player, "carpetdestroyed");
                 }
+            }
+            if(!foundcarpet)
+            {
+                PrintMsgL(player, "notfound", MinDistance.ToString());
             }
         }
 
