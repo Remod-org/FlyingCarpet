@@ -7,10 +7,11 @@ using ProtoBuf;
 using Rust;
 using System.Linq;
 using Network;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.0.3")]
+    [Info("FlyingCarpet", "RFC1920", "1.0.4")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, and lock.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based
     class FlyingCarpet : RustPlugin
@@ -35,6 +36,12 @@ namespace Oxide.Plugins
             layerMask = (1 << 29);
             layerMask |= (1 << 18);
             layerMask = ~layerMask;
+
+            AddCovalenceCommand("fc", "cmdCarpetBuild");
+            AddCovalenceCommand("fcc", "cmdCarpetCount");
+            AddCovalenceCommand("fcd", "cmdCarpetDestroy");
+            AddCovalenceCommand("fchelp", "cmdCarpetHelp");
+
             permission.RegisterPermission("flyingcarpet.use", this);
             permission.RegisterPermission("flyingcarpet.unlimited", this);
 
@@ -77,6 +84,7 @@ namespace Oxide.Plugins
         static float NormalSpeed = 12f;
         static float SprintSpeed = 25f;
         static bool requirefuel = true;
+        static bool doublefuel = false;
 
         //bool Changed = false;
 
@@ -98,6 +106,7 @@ namespace Oxide.Plugins
             CheckCfg("Deploy - Enable limited FlyingCarpets per person : ", ref UseMaxCarpetChecks);
             CheckCfg("Deploy - Limit of Carpets players can build : ", ref maxcarpets);
             CheckCfg("Require Fuel to Operate : ", ref requirefuel);
+            CheckCfg("Double Fuel Consumption: ", ref doublefuel);
             CheckCfg("RugSkinID : ", ref rugSkinID);
             CheckCfg("ChairSkinID : ", ref chairSkinID);
         }
@@ -111,17 +120,25 @@ namespace Oxide.Plugins
         private void CheckCfg<T>(string Key, ref T var)
         {
             if (Config[Key] is T)
+            {
                 var = (T)Config[Key];
+            }
             else
+            {
                 Config[Key] = var;
+            }
         }
 
         private void CheckCfgFloat(string Key, ref float var)
         {
             if (Config[Key] != null)
+            {
                 var = Convert.ToSingle(Config[Key]);
+            }
             else
+            {
                 Config[Key] = var;
+            }
         }
 
         object GetConfig(string menu, string datavalue, object defaultValue)
@@ -165,126 +182,50 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        // This is how we take off or land the carpet!
-        object OnOvenToggle(BaseOven oven, BasePlayer player)
+        #region Chat Commands
+        [Command("fc"), Permission("flyingcarpet.use")]
+        void cmdCarpetBuild(IPlayer iplayer, string command, string[] args)
         {
-            bool rtrn = false; // Must match other plugins with this call to avoid conflicts. QuickSmelt uses false
-            try
-            {
-                var activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
-                if (activecarpet == null) return rtrn;
-
-                if (activecarpet.carpetlock != null && activecarpet.carpetlock.IsLocked()) { PrintMsgL(player, "carpetlocked"); return rtrn; }
-                if (!player.isMounted) return rtrn; // player offline, does not mean ismounted on carpet
-
-                if (player.GetMounted() != activecarpet.entity) return rtrn; // online player not in seat on carpet
-#if DEBUG
-                Puts("OnOvenToggle: Player cycled lantern!");
-#endif
-                if (!activecarpet.FuelCheck())
-                {
-                    if (activecarpet.needfuel)
-                    {
-                        PrintMsgL(player, "nofuel");
-                        PrintMsgL(player, "landingcarpet");
-                        activecarpet.engineon = false;
-                    }
-                }
-                var ison = activecarpet.engineon;
-                if (ison) { activecarpet.islanding = true; PrintMsgL(player, "landingcarpet"); return null; }
-                if (!ison) { AddPlayerToPilotsList(player); activecarpet.engineon = true; return null; }
-            }
-            catch { }
-            return null;
+            //if (!iplayer.HasPermission("flyingcarpet.use")) { PrintMsgL(player, "notauthorized"); return; }
+            var player = iplayer.Object as BasePlayer;
+            if (CarpetLimitReached(player)) { PrintMsgL(player, "maxcarpets"); return; }
+            AddCarpet(player, player.transform.position);
         }
 
-        // Check for carpet lantern fuel
-        void OnConsumeFuel(BaseOven oven, Item fuel, ItemModBurnable burnable)
+        [Command("fcc")]
+        void cmdCarpetCount(IPlayer iplayer, string command, string[] args)
         {
-            // Only work on lanterns
-            if (oven.ShortPrefabName != "lantern.deployed") return;
-
-            BaseEntity lantern = oven as BaseEntity;
-            // Only work on lanterns attached to a Carpet
-            var activecarpet = lantern.GetComponentInParent<CarpetEntity>() ?? null;
-            if (activecarpet == null) return;
-#if DEBUG
-            Puts("OnConsumeFuel: found a carpet lantern!");
-#endif
-            if (activecarpet.needfuel)
+            var player = iplayer.Object as BasePlayer;
+            if (!loadplayer.ContainsKey(player.userID))
             {
-#if DEBUG
-                Puts("OnConsumeFuel: carpet requires fuel!");
-#endif
-            }
-            else
-            {
-#if DEBUG
-                Puts("OnConsumeFuel: carpet does not require fuel!");
-#endif
-                fuel.amount++; // Required to keep it from decrementing
+                PrintMsgL(player, "nocarpets");
                 return;
             }
-            BasePlayer player = activecarpet.GetComponent<BaseMountable>().GetMounted() as BasePlayer;
-            if (!player) return;
+            string ccount = loadplayer[player.userID].carpetcount.ToString();
 #if DEBUG
-            Puts("OnConsumeFuel: checking fuel level...");
+            Puts("CarpetCount: " + ccount);
 #endif
-            // Before it drops to 1 AFTER this hook call is complete, warn them that the fuel is low (1) - ikr
-            if (fuel.amount == 2)
-            {
-#if DEBUG
-                Puts("OnConsumeFuel: sending low fuel warning...");
-#endif
-                Effect.server.Run("assets/bundled/prefabs/fx/well/pump_down.prefab", player.transform.position);
-                PrintMsgL(player, "lowfuel");
-            }
-            if (fuel.amount == 0)
-            {
-#if DEBUG
-                Puts("OnConsumeFuel: out of fuel.");
-#endif
-                PrintMsgL(player, "lowfuel");
-                var ison = activecarpet.engineon;
-                if (ison)
-                {
-                    activecarpet.islanding = true;
-                    activecarpet.engineon = false;
-                    PrintMsgL(player, "landingcarpet");
-                    OnOvenToggle(oven, player);
-                    return;
-                }
-            }
+            PrintMsgL(player, "currcarpets", ccount);
         }
 
-        #region Chat Commands
-
-        [ChatCommand("fchelp")]
-        void chatCarpetHelp(BasePlayer player, string command, string[] args)
+        [Command("fcd")]
+        void cmdCarpetDestroy(IPlayer iplayer, string command, string[] args)
         {
+            var player = iplayer.Object as BasePlayer;
+            RemoveCarpet(player);
+            DestroyLocalCarpet(player);
+        }
+
+        [Command("fchelp")]
+        void cmdCarpetHelp(IPlayer iplayer, string command, string[] args)
+        {
+            var player = iplayer.Object as BasePlayer;
             PrintMsgL(player, "helptext1");
             PrintMsgL(player, "helptext2");
             PrintMsgL(player, "helptext3");
             PrintMsgL(player, "helptext4");
         }
-
-        [ChatCommand("fc")]
-        void chatBuildCarpet(BasePlayer player, string command, string[] args)
-        {
-            if (!isAllowed(player, "flyingcarpet.use")) { PrintMsgL(player, "notauthorized"); return; }
-            if (CarpetLimitReached(player)) { PrintMsgL(player, "maxcarpets"); return; }
-            AddCarpet(player, player.transform.position);
-        }
-
-        [ConsoleCommand("fc")]
-        void cmdConsoleBuildCarpet(ConsoleSystem.Arg arg)
-        {
-            var player = arg.Player() ?? null;
-            if (player == null) return;
-            if (!isAllowed(player, "flyingcarpet.use")) { PrintMsgL(player, "notauthorized"); return; }
-            if (CarpetLimitReached(player)) { PrintMsgL(player, "maxcarpets"); return; }
-            AddCarpet(player, player.transform.position);
-        }
+        #endregion
 
         private void AddCarpet(BasePlayer player, Vector3 location)
         {
@@ -354,31 +295,106 @@ namespace Oxide.Plugins
             }
         }
 
-        [ChatCommand("fcc")]
-        void cmdChatCarpetCount(BasePlayer player, string command, string[] args)
+        #region Hooks
+        // This is how we take off or land the carpet!
+        object OnOvenToggle(BaseOven oven, BasePlayer player)
         {
-            if (!loadplayer.ContainsKey(player.userID))
+            bool rtrn = false; // Must match other plugins with this call to avoid conflicts. QuickSmelt uses false
+            try
             {
-                PrintMsgL(player, "nocarpets");
+                var activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
+                if (activecarpet == null) return rtrn;
+
+                if (activecarpet.carpetlock != null && activecarpet.carpetlock.IsLocked()) { PrintMsgL(player, "carpetlocked"); return rtrn; }
+                if (!player.isMounted) return rtrn; // player offline, does not mean ismounted on carpet
+
+                if (player.GetMounted() != activecarpet.entity) return rtrn; // online player not in seat on carpet
+#if DEBUG
+                Puts("OnOvenToggle: Player cycled lantern!");
+#endif
+                if (!activecarpet.FuelCheck())
+                {
+                    if (activecarpet.needfuel)
+                    {
+                        PrintMsgL(player, "nofuel");
+                        PrintMsgL(player, "landingcarpet");
+                        activecarpet.engineon = false;
+                    }
+                }
+                var ison = activecarpet.engineon;
+                if (ison) { activecarpet.islanding = true; PrintMsgL(player, "landingcarpet"); return null; }
+                if (!ison) { AddPlayerToPilotsList(player); activecarpet.engineon = true; return null; }
+            }
+            catch { }
+            return null;
+        }
+
+        // Check for carpet lantern fuel
+        void OnConsumeFuel(BaseOven oven, Item fuel, ItemModBurnable burnable)
+        {
+            // Only work on lanterns
+            if (oven.ShortPrefabName != "lantern.deployed") return;
+            int dbl = doublefuel ? 4 : 2;
+
+            BaseEntity lantern = oven as BaseEntity;
+            // Only work on lanterns attached to a Carpet
+            var activecarpet = lantern.GetComponentInParent<CarpetEntity>() ?? null;
+            if (activecarpet == null) return;
+#if DEBUG
+            Puts("OnConsumeFuel: found a carpet lantern!");
+#endif
+            if (activecarpet.needfuel)
+            {
+#if DEBUG
+                Puts("OnConsumeFuel: carpet requires fuel!");
+#endif
+            }
+            else
+            {
+#if DEBUG
+                Puts("OnConsumeFuel: carpet does not require fuel!");
+#endif
+                fuel.amount++; // Required to keep it from decrementing
                 return;
             }
-            string ccount = loadplayer[player.userID].carpetcount.ToString();
+            BasePlayer player = activecarpet.GetComponent<BaseMountable>().GetMounted() as BasePlayer;
+            if (!player) return;
 #if DEBUG
-            Puts("CarpetCount: " + ccount);
+            Puts("OnConsumeFuel: checking fuel level...");
 #endif
-            PrintMsgL(player, "currcarpets", ccount);
+            // Before it drops to 1 (3 for doublefuel) AFTER this hook call is complete, warn them that the fuel is low (1) - ikr
+            if (fuel.amount == dbl)
+            {
+#if DEBUG
+                Puts("OnConsumeFuel: sending low fuel warning...");
+#endif
+                Effect.server.Run("assets/bundled/prefabs/fx/well/pump_down.prefab", player.transform.position);
+                PrintMsgL(player, "lowfuel");
+            }
+
+            if(doublefuel)
+            {
+                fuel.amount--;
+            }
+
+            if (fuel.amount == 0)
+            {
+#if DEBUG
+                Puts("OnConsumeFuel: out of fuel.");
+#endif
+                PrintMsgL(player, "lowfuel");
+                var ison = activecarpet.engineon;
+                if (ison)
+                {
+                    activecarpet.islanding = true;
+                    activecarpet.engineon = false;
+                    PrintMsgL(player, "landingcarpet");
+                    OnOvenToggle(oven, player);
+                    return;
+                }
+            }
         }
 
-        [ChatCommand("fcd")]
-        void cmdChatCarpetDestroy(BasePlayer player, string command, string[] args)
-        {
-            RemoveCarpet(player);
-            DestroyLocalCarpet(player);
-        }
-
-        #endregion
-
-        #region Hooks
         // For NightLantern and others that want to toggle this lantern, potentially
         private object CanToggleOven(BaseOven oven)
         {
@@ -632,11 +648,9 @@ namespace Oxide.Plugins
         {
             DestroyAll<CarpetEntity>();
         }
-
         #endregion
 
         #region Carpet Antihack check
-
         static List<BasePlayer> carpetantihack = new List<BasePlayer>();
 
         object OnPlayerViolation(BasePlayer player, AntiHackType type, float amount)
@@ -645,11 +659,9 @@ namespace Oxide.Plugins
             if (carpetantihack.Contains(player)) return false;
             return null;
         }
-
         #endregion
 
         #region Carpet Entity
-
         class CarpetEntity : BaseEntity
         {
             public BaseEntity entity;
@@ -1017,7 +1029,6 @@ namespace Oxide.Plugins
                 if (entity != null) { entity.Invoke("KillMessage", 0.1f); }
             }
         }
-
         #endregion
     }
 }
