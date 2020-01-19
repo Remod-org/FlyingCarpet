@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.0.4")]
+    [Info("FlyingCarpet", "RFC1920", "1.0.5")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, and lock.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based
     class FlyingCarpet : RustPlugin
@@ -186,8 +186,8 @@ namespace Oxide.Plugins
         [Command("fc"), Permission("flyingcarpet.use")]
         void cmdCarpetBuild(IPlayer iplayer, string command, string[] args)
         {
-            //if (!iplayer.HasPermission("flyingcarpet.use")) { PrintMsgL(player, "notauthorized"); return; }
             var player = iplayer.Object as BasePlayer;
+            if (!iplayer.HasPermission("flyingcarpet.use")) { PrintMsgL(player, "notauthorized"); return; }
             if (CarpetLimitReached(player)) { PrintMsgL(player, "maxcarpets"); return; }
             AddCarpet(player, player.transform.position);
         }
