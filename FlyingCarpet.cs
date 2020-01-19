@@ -15,7 +15,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.1.0")]
+    [Info("FlyingCarpet", "RFC1920", "1.1.1")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, and lock.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based
     class FlyingCarpet : RustPlugin
@@ -428,27 +428,26 @@ namespace Oxide.Plugins
             }
         }
 
-        // For NightLantern and others that want to toggle this lantern, potentially
-        private object CanToggleOven(BaseOven oven)
+        // To skip cycling our lantern (thanks, k11l0u)
+        private object OnNightLanternToggle(BaseEntity entity, bool status)
         {
             // Only work on lanterns
-            if(oven.ShortPrefabName != "lantern.deployed") return null;
+            if(entity.ShortPrefabName != "lantern.deployed") return null;
 #if DEBUG
-            Puts("CanToggleOven: Called on a lantern.  Checking for carpet...");
+            Puts("OnNightLanternToggle: Called on a lantern.  Checking for carpet...");
 #endif
 
             // Only work on lanterns attached to a Carpet
-            BaseEntity lantern = oven as BaseEntity;
-            var activecarpet = lantern.GetComponentInParent<CarpetEntity>() ?? null;
+            var activecarpet = entity.GetComponentInParent<CarpetEntity>() ?? null;
             if(activecarpet != null)
             {
 #if DEBUG
-                Puts("CanToggleOven: Do not cycle this lantern!");
+                Puts("OnNightLanternToggle: Do not cycle this lantern!");
 #endif
                 return true;
             }
 #if DEBUG
-            Puts("CanToggleOven: Not a carpet lantern.");
+            Puts("OnNightLanternToggle: Not a carpet lantern.");
 #endif
             return null;
         }
