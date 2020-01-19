@@ -15,9 +15,9 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.1.1")]
-    [Description("Fly a custom object consisting of carpet, chair, lantern, and lock.")]
-    // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based
+    [Info("FlyingCarpet", "RFC1920", "1.1.2")]
+    [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
+    // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
     {
         #region Load
@@ -47,6 +47,7 @@ namespace Oxide.Plugins
             AddCovalenceCommand("fc", "cmdCarpetBuild");
             AddCovalenceCommand("fcc", "cmdCarpetCount");
             AddCovalenceCommand("fcd", "cmdCarpetDestroy");
+            AddCovalenceCommand("fcg", "cmdCarpetGiveChat");
             AddCovalenceCommand("fchelp", "cmdCarpetHelp");
 
             permission.RegisterPermission("flyingcarpet.use", this);
@@ -72,13 +73,17 @@ namespace Oxide.Plugins
                 ["carpetfuel"] = "You will need fuel to fly.  Do not start without fuel !!",
                 ["carpetnofuel"] = "You have been granted unlimited fly time, no fuel required !!",
                 ["nofuel"] = "You're out of fuel !!",
+                ["noplayer"] = "Unable to find player {0}!",
+                ["gaveplayer"] = "Gave carpet to player {0}!",
                 ["lowfuel"] = "You're low on fuel !!",
                 ["nocarpets"] = "You have no Carpets",
-                ["currcarpets"] = "Current Carpets : {0}"
+                ["currcarpets"] = "Current Carpets : {0}",
+                ["giveusage"] = "You need to supply a valid SteamId."
             }, this);
         }
 
         bool isAllowed(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
+        private bool HasPermission(ConsoleSystem.Arg arg, string permname) => (arg.Connection.player as BasePlayer) == null ? true : permission.UserHasPermission((arg.Connection.player as BasePlayer).UserIDString, permname);
 
         private static HashSet<BasePlayer> FindPlayers(string nameOrIdOrIp)
         {
@@ -235,6 +240,78 @@ namespace Oxide.Plugins
             }
             if(CarpetLimitReached(player, vip)) { PrintMsgL(player, "maxcarpets"); return; }
             AddCarpet(player, player.transform.position);
+        }
+
+        [Command("fcg"), Permission("flyingcarpet.admin")]
+        void cmdCarpetGiveChat(IPlayer iplayer, string command, string[] args)
+        {
+            var player = iplayer.Object as BasePlayer;
+            if(args.Length == 0)
+            {
+                PrintMsgL(player, "giveusage");
+                return;
+            }
+            bool vip = false;
+            string pname = args[0] == null ? null : args[0];
+
+            if(!iplayer.HasPermission("flyingcarpet.admin")) { PrintMsgL(player, "notauthorized"); return; }
+            if(pname == null) { PrintMsgL(player, "noplayer", "NAME_OR_ID"); return; }
+
+            BasePlayer Bplayer = BasePlayer.Find(pname);
+            if(Bplayer == null)
+            {
+                PrintMsgL(player, "noplayer", pname);
+                return;
+            }
+
+            var Iplayer = Bplayer.IPlayer;
+            if(Iplayer.HasPermission("flyingcarpet.vip"))
+            {
+                vip = true;
+            }
+            if(CarpetLimitReached(Bplayer, vip)) { PrintMsgL(player, "maxcarpets"); return; }
+            AddCarpet(Bplayer, Bplayer.transform.position);
+            PrintMsgL(player, "gaveplayer", pname);
+        }
+
+        [ConsoleCommand("fcgive")]
+        void cmdCarpetGive(ConsoleSystem.Arg arg)
+        {
+            if(arg.IsRcon)
+            {
+                if(arg.Args == null)
+                {
+                    Puts("You need to supply a valid SteamId.");
+                    return;
+                }
+            }
+            else if(!HasPermission(arg, "flyingcarpet.admin"))
+            {
+                SendReply(arg, _("notauthorized", arg.Connection.player as BasePlayer));
+                return;
+            }
+            else if(arg.Args == null)
+            {
+                SendReply(arg, _("giveusage", arg.Connection.player as BasePlayer));
+                return;
+            }
+
+            bool vip = false;
+            string pname = arg.GetString(0);
+
+            if(pname.Length < 1) { Puts("Player name or id cannot be null"); return; }
+
+            BasePlayer Bplayer = BasePlayer.Find(pname);
+            if(Bplayer == null) { Puts($"Unable to find player '{pname}'"); return; }
+
+            var Iplayer = Bplayer.IPlayer;
+            if(Iplayer.HasPermission("flyingcarpet.vip")) { vip = true; }
+            if(CarpetLimitReached(Bplayer, vip))
+            {
+                Puts($"Player '{pname}' has reached maxcarpets"); return;
+            }
+            AddCarpet(Bplayer, Bplayer.transform.position);
+            Puts($"Gave carpet to '{Bplayer.displayName}'");
         }
 
         [Command("fcc"), Permission("flyingcarpet.use")]
@@ -484,6 +561,7 @@ namespace Oxide.Plugins
 
             string staticprefab = "assets/prefabs/deployable/chair/chair.deployed.prefab";
             newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
+            newCarpet.name = "FlyingCarpet";
             var chairmount = newCarpet.GetComponent<BaseMountable>();
             chairmount.isMobile = true;
             newCarpet.enableSaving = false;
@@ -502,7 +580,7 @@ namespace Oxide.Plugins
 #endif
                 carpet.SetFuel(0);
             }
-            
+
             // paint sign with username
             if(SignArtist && nameOnSign)
             {
@@ -511,7 +589,7 @@ namespace Oxide.Plugins
                 {
                     string message = player.displayName;
                     int fontsize = Convert.ToInt32(Math.Floor(150f / message.Length));
-                    Puts($"Name length = {message.Length.ToString()}, fontsize = {fontsize}");
+                    //Puts($"Name length = {message.Length.ToString()}, fontsize = {fontsize}");
                     SignArtist.Call("signText", player, carpet.sign, message, fontsize, "00FF00", "000000");
                 }
             }
@@ -729,11 +807,18 @@ namespace Oxide.Plugins
             }
             catch {}
 
-            if(myparent == "FlyingCarpet")
+            if(myparent == "FlyingCarpet" || myent.name == "FlyingCarpet")
             {
 #if DEBUG
-                string entity_name = myent.LookupPrefab().name;
-                Puts("CanPickupEntity: player trying to remove " + entity_name + " from a carpet!");
+                if(myent.name == "FlyingCarpet")
+                {
+                    Puts("CanPickupEntity: player trying to pickup the carpet!");
+                }
+                else if(myparent == "FlyingCarpet")
+                {
+                    string entity_name = myent.LookupPrefab().name;
+                    Puts($"CanPickupEntity: player trying to remove {entity_name} from a carpet!");
+                }
 #endif
                 PrintMsgL(player, "notauthorized");
                 return false;
@@ -845,6 +930,8 @@ namespace Oxide.Plugins
             public BaseEntity lights1;
             public BaseEntity lights2;
             public BaseEntity sign;
+
+            public string entname = "FlyingCarpet";
 
             Quaternion entityrot;
             Vector3 entitypos;
@@ -1073,10 +1160,7 @@ namespace Oxide.Plugins
                     if(throttleup) { currentspeed = sprintspeed; }
 
                     // This is a little weird.  Fortunately, some of the hooks determine fuel status...
-                    if(hasFuel)
-                    {
-                    }
-                    else
+                    if(!hasFuel)
                     {
                         if(needfuel)
                         {
