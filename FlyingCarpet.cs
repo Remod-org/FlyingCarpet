@@ -1,4 +1,5 @@
-﻿//#define DEBUG
+//#define DEBUG
+using Oxide.Core;
 using Oxide.Game.Rust.Cui;
 using System;
 using System.Collections.Generic;
@@ -10,22 +11,25 @@ using Network;
 using Oxide.Core.Libraries.Covalence;
 using System;
 using System.Globalization;
+using Oxide.Core.Plugins;
 
-//using System.Text.Regst);wularExpressions;
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.0.9")]
+    [Info("FlyingCarpet", "RFC1920", "1.1.0")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, and lock.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based
     class FlyingCarpet : RustPlugin
     {
         #region Load
-
         static LayerMask layerMask;
         BaseEntity newCarpet;
 
         static Dictionary<ulong, PlayerCarpetData> loadplayer = new Dictionary<ulong, PlayerCarpetData>();
         static List<ulong> pilotslist = new List<ulong>();
+
+        // SignArtist plugin
+        [PluginReference]
+        Plugin SignArtist;
 
         public class PlayerCarpetData
         {
@@ -98,11 +102,9 @@ namespace Oxide.Plugins
             }
             return players;
         }
-
         #endregion
 
         #region Configuration
-
         bool UseMaxCarpetChecks = true;
         bool playemptysound = true;
         public int maxcarpets = 1;
@@ -118,6 +120,7 @@ namespace Oxide.Plugins
         static float SprintSpeed = 25f;
         static bool requirefuel = true;
         static bool doublefuel = false;
+        static bool nameOnSign = true;
 
         //bool Changed = false;
 
@@ -145,6 +148,7 @@ namespace Oxide.Plugins
             CheckCfg("Double Fuel Consumption: ", ref doublefuel);
             CheckCfg("RugSkinID : ", ref rugSkinID);
             CheckCfg("ChairSkinID : ", ref chairSkinID);
+            CheckCfg("Owner Name on Sign: ", ref nameOnSign);
         }
 
         private void LoadVariables()
@@ -263,19 +267,11 @@ namespace Oxide.Plugins
             }
             if(iplayer.HasPermission("flyingcarpet.admin") && target != null)
             {
-// Not working yet...
-//                if(target == "all")
-//                {
-//                    foreach(var tgt in pilotslist)
-//                    {
-//                        Puts($"cmdCarpetDestroy: Bulk {tgt.ToString()}");
-//                        var tgts = FindPlayers(tgt.ToString());
-//                        var tgteach = tgts.First();
-//                        RemoveCarpet(tgteach);
-//                        DestroyRemoteCarpet(tgteach);
-//                    }
-//                    return;
-//                }
+                if(target == "all")
+                {
+                    DestroyAllCarpets(player);
+                    return;
+                }
                 var players = FindPlayers(target);
                 if (players.Count <= 0)
                 {
@@ -310,106 +306,57 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        private void AddCarpet(BasePlayer player, Vector3 location)
-        {
-            if(player == null && location == null) return;
-            if(location == null && player != null) location = player.transform.position;
-            Vector3 spawnpos = new Vector3();
-
-            // Set initial default for fuel requirement based on config
-            bool needfuel = requirefuel;
-            if(isAllowed(player, "flyingcarpet.unlimited"))
-            {
-                // User granted unlimited fly time without fuel
-                needfuel = false;
-#if DEBUG
-                Puts("AddCarpet: Unlimited fuel granted!");
-#endif
-            }
-
-            if(needfuel)
-            {
-                // Don't put them on the carpet since they need to fuel up first
-                spawnpos = player.transform.position + -player.transform.forward * 2f + new Vector3(0, 1f, 0);
-            }
-            else
-            {
-                // Spawn at point of player
-                spawnpos = new Vector3(location.x, location.y + 0.5f, location.z);
-            }
-
-            string staticprefab = "assets/prefabs/deployable/chair/chair.deployed.prefab";
-            newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
-            var chairmount = newCarpet.GetComponent<BaseMountable>();
-            chairmount.isMobile = true;
-            newCarpet.enableSaving = false;
-            newCarpet.OwnerID = player.userID;
-            newCarpet.skinID = chairSkinID;
-            newCarpet.Spawn();
-            var carpet = newCarpet.gameObject.AddComponent<CarpetEntity>();
-            carpet.needfuel = needfuel;
-            // Unlock the tank if they need fuel.
-            carpet.lantern1.SetFlag(BaseEntity.Flags.Locked, !needfuel);
-            if(needfuel)
-            {
-#if DEBUG
-                // We have to set this after the spawn.
-                Puts("AddCarpet: Emptying the tank!");
-#endif
-                carpet.SetFuel(0);
-            }
-
-            AddPlayerID(player.userID);
-
-            if(chairmount != null && player != null)
-            {
-                PrintMsgL(player, "carpetspawned");
-                if(carpet.needfuel)
-                {
-                    PrintMsgL(player, "carpetfuel");
-                }
-                else
-                {
-                    // Put them in the chair.  They will still need to unlock it.
-                    PrintMsgL(player, "carpetnofuel");
-                    chairmount.MountPlayer(player);
-                }
-                return;
-            }
-        }
-
         #region Hooks
         // This is how we take off or land the carpet!
         object OnOvenToggle(BaseOven oven, BasePlayer player)
         {
             bool rtrn = false; // Must match other plugins with this call to avoid conflicts. QuickSmelt uses false
+
+            CarpetEntity activecarpet;
+
             try
             {
-                var activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
-                if(activecarpet == null) return rtrn;
-
-                if(activecarpet.carpetlock != null && activecarpet.carpetlock.IsLocked()) { PrintMsgL(player, "carpetlocked"); return rtrn; }
-                if(!player.isMounted) return rtrn; // player offline, does not mean ismounted on carpet
-
-                if(player.GetMounted() != activecarpet.entity) return rtrn; // online player not in seat on carpet
-#if DEBUG
-                Puts("OnOvenToggle: Player cycled lantern!");
-#endif
-                if(!activecarpet.FuelCheck())
+                activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
+                if(activecarpet == null)
                 {
-                    if(activecarpet.needfuel)
-                    {
-                        PrintMsgL(player, "nofuel");
-                        PrintMsgL(player, "landingcarpet");
-                        activecarpet.engineon = false;
-                    }
+                    oven.StopCooking();
+                    return rtrn;
                 }
-                var ison = activecarpet.engineon;
-                if(ison) { activecarpet.islanding = true; PrintMsgL(player, "landingcarpet"); return null; }
-                if(!ison) { AddPlayerToPilotsList(player); activecarpet.engineon = true; return null; }
             }
-            catch { }
-            return null;
+            catch
+            {
+                return null;
+            }
+
+            if(activecarpet.carpetlock != null && activecarpet.carpetlock.IsLocked()) { PrintMsgL(player, "carpetlocked"); return rtrn; }
+            if(!player.isMounted) return rtrn; // player offline, does not mean ismounted on carpet
+
+            if(player.GetMounted() != activecarpet.entity) return rtrn; // online player not in seat on carpet
+#if DEBUG
+            Puts("OnOvenToggle: Player cycled lantern!");
+#endif
+            if(oven.IsOn())
+            {
+                oven.StopCooking();
+            }
+            else
+            {
+                oven.StartCooking();
+            }
+            if(!activecarpet.FuelCheck())
+            {
+                if(activecarpet.needfuel)
+                {
+                    PrintMsgL(player, "nofuel");
+                    PrintMsgL(player, "landingcarpet");
+                    activecarpet.engineon = false;
+                }
+            }
+            var ison = activecarpet.engineon;
+            if(ison) { activecarpet.islanding = true; PrintMsgL(player, "landingcarpet"); return null; }
+            if(!ison) { AddPlayerToPilotsList(player); activecarpet.engineon = true; return null; }
+
+            return rtrn;
         }
 
         // Check for carpet lantern fuel
@@ -505,6 +452,90 @@ namespace Oxide.Plugins
 #endif
             return null;
         }
+        #endregion
+
+        #region Primary
+        private void AddCarpet(BasePlayer player, Vector3 location)
+        {
+            if(player == null && location == null) return;
+            if(location == null && player != null) location = player.transform.position;
+            Vector3 spawnpos = new Vector3();
+
+            // Set initial default for fuel requirement based on config
+            bool needfuel = requirefuel;
+            if(isAllowed(player, "flyingcarpet.unlimited"))
+            {
+                // User granted unlimited fly time without fuel
+                needfuel = false;
+#if DEBUG
+                Puts("AddCarpet: Unlimited fuel granted!");
+#endif
+            }
+
+            if(needfuel)
+            {
+                // Don't put them on the carpet since they need to fuel up first
+                spawnpos = player.transform.position + -player.transform.forward * 2f + new Vector3(0, 1f, 0);
+            }
+            else
+            {
+                // Spawn at point of player
+                spawnpos = new Vector3(location.x, location.y + 0.5f, location.z);
+            }
+
+            string staticprefab = "assets/prefabs/deployable/chair/chair.deployed.prefab";
+            newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
+            var chairmount = newCarpet.GetComponent<BaseMountable>();
+            chairmount.isMobile = true;
+            newCarpet.enableSaving = false;
+            newCarpet.OwnerID = player.userID;
+            newCarpet.skinID = chairSkinID;
+            newCarpet.Spawn();
+            var carpet = newCarpet.gameObject.AddComponent<CarpetEntity>();
+            carpet.needfuel = needfuel;
+            // Unlock the tank if they need fuel.
+            carpet.lantern1.SetFlag(BaseEntity.Flags.Locked, !needfuel);
+            if(needfuel)
+            {
+#if DEBUG
+                // We have to set this after the spawn.
+                Puts("AddCarpet: Emptying the tank!");
+#endif
+                carpet.SetFuel(0);
+            }
+            
+            // paint sign with username
+            if(SignArtist && nameOnSign)
+            {
+                // This only works with version 1.1.7 on
+                if(SignArtist.Version >= new VersionNumber(1, 1, 7))
+                {
+                    string message = player.displayName;
+                    int fontsize = Convert.ToInt32(Math.Floor(150f / message.Length));
+                    Puts($"Name length = {message.Length.ToString()}, fontsize = {fontsize}");
+                    SignArtist.Call("signText", player, carpet.sign, message, fontsize, "00FF00", "000000");
+                }
+            }
+            carpet.sign.SetFlag(BaseEntity.Flags.Locked, true);
+
+            AddPlayerID(player.userID);
+
+            if(chairmount != null && player != null)
+            {
+                PrintMsgL(player, "carpetspawned");
+                if(carpet.needfuel)
+                {
+                    PrintMsgL(player, "carpetfuel");
+                }
+                else
+                {
+                    // Put them in the chair.  They will still need to unlock it.
+                    PrintMsgL(player, "carpetnofuel");
+                    chairmount.MountPlayer(player);
+                }
+                return;
+            }
+        }
 
         public bool PilotListContainsPlayer(BasePlayer player)
         {
@@ -550,6 +581,29 @@ namespace Oxide.Plugins
                 PrintMsgL(player, "notfound", MinDistance.ToString());
             }
         }
+
+        void DestroyAllCarpets(BasePlayer player)
+        {
+            List<BaseEntity> carpetlist = new List<BaseEntity>();
+            Vis.Entities<BaseEntity>(new Vector3(0,0,0), 3500f, carpetlist);
+            bool foundcarpet = false;
+
+            foreach(BaseEntity p in carpetlist)
+            {
+                var foundent = p.GetComponentInParent<CarpetEntity>() ?? null;
+                if(foundent != null)
+                {
+                    foundcarpet = true;
+                    foundent.entity.Kill(BaseNetworkable.DestroyMode.Gib);
+                    PrintMsgL(player, "carpetdestroyed");
+                }
+            }
+            if(!foundcarpet)
+            {
+                PrintMsgL(player, "notfound", MinDistance.ToString());
+            }
+        }
+
         void DestroyRemoteCarpet(BasePlayer player)
         {
             if(player == null) return;
@@ -791,6 +845,7 @@ namespace Oxide.Plugins
             public BaseEntity carpetlock;
             public BaseEntity lights1;
             public BaseEntity lights2;
+            public BaseEntity sign;
 
             Quaternion entityrot;
             Vector3 entitypos;
@@ -824,6 +879,7 @@ namespace Oxide.Plugins
             string prefablamp = "assets/prefabs/deployable/lantern/lantern.deployed.prefab";
             string prefablights = "assets/prefabs/misc/xmas/christmas_lights/xmas.lightstring.deployed.prefab";
             string prefablock = "assets/prefabs/locks/keypad/lock.code.prefab";
+            string prefabsign = "assets/prefabs/deployable/signs/sign.small.wood.prefab";
 
             void Awake()
             {
@@ -858,6 +914,7 @@ namespace Oxide.Plugins
                 skinid = rugSkinID;
                 SpawnCarpet();
                 lantern1.OwnerID = entity.OwnerID;
+                sign.OwnerID = entity.OwnerID;
 
                 sphereCollider = entity.gameObject.AddComponent<SphereCollider>();
                 sphereCollider.gameObject.layer = (int)Layer.Reserved1;
@@ -871,7 +928,6 @@ namespace Oxide.Plugins
                 entitypart = GameManager.server.CreateEntity(prefab, entitypos, entityrot, setactive);
                 entitypart.transform.localEulerAngles = new Vector3(eulangx, eulangy, eulangz);
                 entitypart.transform.localPosition = new Vector3(locposx, locposy, locposz);
-                entitypart.OwnerID = ownerid;
 
                 entitypart.SetParent(parent, 0);
                 entitypart.skinID = skinid;
@@ -924,6 +980,7 @@ namespace Oxide.Plugins
                 lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, 0.3f, 1f, entity, 1);
                 lantern1.SetFlag(BaseEntity.Flags.On, false);
                 carpetlock = SpawnPart(prefablock, carpetlock, true, 0, 90, 90, 0.5f, 0.3f, 0.7f, entity, 1);
+                sign = SpawnPart(prefabsign, sign, true, -45, 0, 0, 0, 0.25f, 1.75f, entity, 1);
 
                 if(needfuel)
                 {
