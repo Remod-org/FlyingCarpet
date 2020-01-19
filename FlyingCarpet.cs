@@ -8,10 +8,12 @@ using Rust;
 using System.Linq;
 using Network;
 using Oxide.Core.Libraries.Covalence;
+using System;
+using System.Globalization;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.0.7")]
+    [Info("FlyingCarpet", "RFC1920", "1.0.8")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, and lock.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based
     class FlyingCarpet : RustPlugin
@@ -44,6 +46,7 @@ namespace Oxide.Plugins
 
             permission.RegisterPermission("flyingcarpet.use", this);
             permission.RegisterPermission("flyingcarpet.vip", this);
+            permission.RegisterPermission("flyingcarpet.admin", this);
             permission.RegisterPermission("flyingcarpet.unlimited", this);
 
             lang.RegisterMessages(new Dictionary<string, string>
@@ -71,6 +74,29 @@ namespace Oxide.Plugins
         }
 
         bool isAllowed(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
+
+        private static HashSet<BasePlayer> FindPlayers(string nameOrIdOrIp)
+        {
+            var players = new HashSet<BasePlayer>();
+            if (string.IsNullOrEmpty(nameOrIdOrIp)) return players;
+            foreach (var activePlayer in BasePlayer.activePlayerList)
+            {
+                if (activePlayer.UserIDString.Equals(nameOrIdOrIp))
+                    players.Add(activePlayer);
+                else if (!string.IsNullOrEmpty(activePlayer.displayName) && activePlayer.displayName.Contains(nameOrIdOrIp, CompareOptions.IgnoreCase))
+                    players.Add(activePlayer);
+                else if (activePlayer.net?.connection != null && activePlayer.net.connection.ipaddress.Equals(nameOrIdOrIp))
+                    players.Add(activePlayer);
+            }
+            foreach (var sleepingPlayer in BasePlayer.sleepingPlayerList)
+            {
+                if (sleepingPlayer.UserIDString.Equals(nameOrIdOrIp))
+                    players.Add(sleepingPlayer);
+                else if (!string.IsNullOrEmpty(sleepingPlayer.displayName) && sleepingPlayer.displayName.Contains(nameOrIdOrIp, CompareOptions.IgnoreCase))
+                    players.Add(sleepingPlayer);
+            }
+            return players;
+        }
 
         #endregion
 
@@ -228,8 +254,47 @@ namespace Oxide.Plugins
         {
             var player = iplayer.Object as BasePlayer;
             if(!iplayer.HasPermission("flyingcarpet.use")) { PrintMsgL(player, "notauthorized"); return; }
-            RemoveCarpet(player);
-            DestroyLocalCarpet(player);
+
+            string target = null;
+            if(args.Length > 0)
+            {
+                target = args[0];
+            }
+            if(iplayer.HasPermission("flyingcarpet.admin") && target != null)
+            {
+// Not working yet...
+//                if(target == "all")
+//                {
+//                    foreach(var tgt in pilotslist)
+//                    {
+//                        Puts($"cmdCarpetDestroy: Bulk {tgt.ToString()}");
+//                        var tgts = FindPlayers(tgt.ToString());
+//                        var tgteach = tgts.First();
+//                        RemoveCarpet(tgteach);
+//                        DestroyRemoteCarpet(tgteach);
+//                    }
+//                    return;
+//                }
+                var players = FindPlayers(target);
+                if (players.Count <= 0)
+                {
+                    PrintMsgL(player, "PlayerNotFound", target);
+                    return;
+                }
+                if (players.Count > 1)
+                {
+                    PrintMsgL(player, "MultiplePlayers", target, string.Join(", ", players.Select(p => p.displayName).ToArray()));
+                    return;
+                }
+                var targetPlayer = players.First();
+                RemoveCarpet(targetPlayer);
+                DestroyRemoteCarpet(targetPlayer);
+            }
+            else
+            {
+                RemoveCarpet(player);
+                DestroyLocalCarpet(player);
+            }
         }
 
         [Command("fchelp"), Permission("flyingcarpet.use")]
@@ -466,6 +531,29 @@ namespace Oxide.Plugins
             if(player == null) return;
             List<BaseEntity> carpetlist = new List<BaseEntity>();
             Vis.Entities<BaseEntity>(player.transform.position, MinDistance, carpetlist);
+            bool foundcarpet = false;
+
+            foreach(BaseEntity p in carpetlist)
+            {
+                var foundent = p.GetComponentInParent<CarpetEntity>() ?? null;
+                if(foundent != null)
+                {
+                    foundcarpet = true;
+                    if(foundent.ownerid != player.userID) return;
+                    foundent.entity.Kill(BaseNetworkable.DestroyMode.Gib);
+                    PrintMsgL(player, "carpetdestroyed");
+                }
+            }
+            if(!foundcarpet)
+            {
+                PrintMsgL(player, "notfound", MinDistance.ToString());
+            }
+        }
+        void DestroyRemoteCarpet(BasePlayer player)
+        {
+            if(player == null) return;
+            List<BaseEntity> carpetlist = new List<BaseEntity>();
+            Vis.Entities<BaseEntity>(new Vector3(0,0,0), 3500f, carpetlist);
             bool foundcarpet = false;
 
             foreach(BaseEntity p in carpetlist)
