@@ -11,9 +11,10 @@ using Oxide.Core.Libraries.Covalence;
 using System;
 using System.Globalization;
 
+//using System.Text.Regst);wularExpressions;
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.0.8")]
+    [Info("FlyingCarpet", "RFC1920", "1.0.9")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, and lock.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based
     class FlyingCarpet : RustPlugin
@@ -870,6 +871,7 @@ namespace Oxide.Plugins
                 entitypart = GameManager.server.CreateEntity(prefab, entitypos, entityrot, setactive);
                 entitypart.transform.localEulerAngles = new Vector3(eulangx, eulangy, eulangz);
                 entitypart.transform.localPosition = new Vector3(locposx, locposy, locposz);
+                entitypart.OwnerID = ownerid;
 
                 entitypart.SetParent(parent, 0);
                 entitypart.skinID = skinid;
