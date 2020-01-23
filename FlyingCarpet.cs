@@ -868,7 +868,7 @@ namespace Oxide.Plugins
             return;
         }
 
-        object OnPlayerDie(BasePlayer player, HitInfo info)
+        object OnPlayerDeath(BasePlayer player, HitInfo info)
         {
             RemovePlayerFromPilotsList(player);
             return null;
