@@ -16,7 +16,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.1.3")]
+    [Info("FlyingCarpet", "RFC1920", "1.1.4")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
