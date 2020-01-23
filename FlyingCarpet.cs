@@ -2,6 +2,7 @@
 using Oxide.Core;
 using Oxide.Game.Rust.Cui;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ProtoBuf;
@@ -15,7 +16,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.1.2")]
+    [Info("FlyingCarpet", "RFC1920", "1.1.3")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
@@ -559,7 +560,7 @@ namespace Oxide.Plugins
                 spawnpos = new Vector3(location.x, location.y + 0.5f, location.z);
             }
 
-            string staticprefab = "assets/prefabs/deployable/chair/chair.deployed.prefab";
+            string staticprefab = "assets/bundled/prefabs/static/chair.invisible.static.prefab";
             newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
             newCarpet.name = "FlyingCarpet";
             var chairmount = newCarpet.GetComponent<BaseMountable>();
@@ -589,7 +590,6 @@ namespace Oxide.Plugins
                 {
                     string message = player.displayName;
                     int fontsize = Convert.ToInt32(Math.Floor(150f / message.Length));
-                    //Puts($"Name length = {message.Length.ToString()}, fontsize = {fontsize}");
                     SignArtist.Call("signText", player, carpet.sign, message, fontsize, "00FF00", "000000");
                 }
             }
@@ -924,6 +924,7 @@ namespace Oxide.Plugins
         {
             public BaseEntity entity;
             public BasePlayer player;
+            public BaseEntity sitbox;
             public BaseEntity carpet1;
             public BaseEntity lantern1;
             public BaseEntity carpetlock;
@@ -961,6 +962,7 @@ namespace Oxide.Plugins
             //bool isenabled = true;
             SphereCollider sphereCollider;
 
+            string prefabbox = "assets/prefabs/deployable/signs/sign.small.wood.prefab";
             string prefabcarpet = "assets/prefabs/deployable/rug/rug.deployed.prefab";
             string prefablamp = "assets/prefabs/deployable/lantern/lantern.deployed.prefab";
             string prefablights = "assets/prefabs/misc/xmas/christmas_lights/xmas.lightstring.deployed.prefab";
@@ -1061,8 +1063,12 @@ namespace Oxide.Plugins
 
             public void SpawnCarpet()
             {
+                sitbox = SpawnPart(prefabbox, sitbox, false, 90, 0, 0, -0.01f, 0.5f, -0.1f, entity, skinid);
+				sitbox.SetFlag(BaseEntity.Flags.Locked, true);
                 carpet1 = SpawnPart(prefabcarpet, carpet1, false, 0, 0, 0, 0f, 0.3f, 0f, entity, skinid);
                 carpet1.SetFlag(BaseEntity.Flags.Busy, true, true);
+				carpet1.SetFlag(BaseEntity.Flags.Locked, true);
+
                 lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, 0.3f, 1f, entity, 1);
                 lantern1.SetFlag(BaseEntity.Flags.On, false);
                 carpetlock = SpawnPart(prefablock, carpetlock, true, 0, 90, 90, 0.5f, 0.3f, 0.7f, entity, 1);
@@ -1085,6 +1091,7 @@ namespace Oxide.Plugins
                 lights1.SetFlag(BaseEntity.Flags.Busy, true);
                 lights2 = SpawnPart(prefablights, lights2, true, 0, 90, 0, -0.9f, 0.31f, 0.1f, entity, 1);
                 lights2.SetFlag(BaseEntity.Flags.Busy, true);
+                sitbox.SetFlag(BaseEntity.Flags.Busy, true);
             }
 
             private void OnTriggerEnter(Collider col)
@@ -1183,16 +1190,14 @@ namespace Oxide.Plugins
                             }
                         }
                         ResetMovement();
-                        DoMovementSync(entity);
-                        RefreshEntities();
+                        ServerMgr.Instance.StartCoroutine(RefreshTrain());
                         return;
                     }
 
                     if(Physics.Raycast(new Ray(entity.transform.position, Vector3.down), minaltitude, layerMask))
                     {
                         entity.transform.localPosition += transform.up * minaltitude * Time.deltaTime;
-                        DoMovementSync(entity);
-                        RefreshEntities();
+                        ServerMgr.Instance.StartCoroutine(RefreshTrain());
                         return;
                     }
 
@@ -1205,9 +1210,22 @@ namespace Oxide.Plugins
                     if(moveup) entity.transform.localPosition += ((transform.up * currentspeed) * Time.deltaTime);
                     else if(movedown) entity.transform.localPosition += ((transform.up * -currentspeed) * Time.deltaTime);
 
-                    DoMovementSync(entity);
-                    RefreshEntities();
+                    ServerMgr.Instance.StartCoroutine(RefreshTrain());
                 }
+            }
+
+            private IEnumerator RefreshTrain()
+            {
+                entity.transform.hasChanged = true;
+                for(int i = 0; i < entity.children.Count; i++)
+                {
+                    entity.children[i].transform.hasChanged = true;
+                    entity.children[i].SendNetworkUpdateImmediate();
+                    entity.children[i].UpdateNetworkGroup();
+                }
+                entity.SendNetworkUpdateImmediate();
+                entity.UpdateNetworkGroup();
+                yield return new WaitForEndOfFrame();
             }
 
             void ResetMovement()
@@ -1219,69 +1237,6 @@ namespace Oxide.Plugins
                 rotright = false;
                 rotleft = false;
                 throttleup = false;
-            }
-
-            public void DoMovementSync(BaseEntity entity, bool force = false)
-            {
-                if(force)
-                {
-                    if(Net.sv.write.Start())
-                    {
-                        Net.sv.write.PacketID(Message.Type.EntityDestroy);
-                        Net.sv.write.UInt32(entity.net.ID);
-                        Net.sv.write.UInt8(0);
-                        Net.sv.write.Send(new SendInfo(entity.net.group.subscribers));
-                    }
-                    entity.SendNetworkUpdateImmediate(true);
-                    entity.UpdateNetworkGroup();
-                }
-                else
-                {
-                    if(Net.sv.write.Start())
-                    {
-                        Net.sv.write.PacketID(Message.Type.GroupChange);
-                        Net.sv.write.EntityID(entity.net.ID);
-                        Net.sv.write.GroupID(entity.net.group.ID);
-                        Net.sv.write.Send(new SendInfo(entity.net.group.subscribers));
-                    }
-                    if(Net.sv.write.Start())
-                    {
-                        Net.sv.write.PacketID(Message.Type.EntityPosition);
-                        Net.sv.write.EntityID(entity.net.ID);
-                        Net.sv.write.Vector3(entity.GetNetworkPosition());
-                        Net.sv.write.Vector3(entity.GetNetworkRotation().eulerAngles);
-                        Net.sv.write.Float(entity.GetNetworkTime());
-                        Write write = Net.sv.write;
-                        SendInfo info = new SendInfo(entity.net.group.subscribers);
-                        info.method = SendMethod.ReliableUnordered;
-                        info.priority = Priority.Immediate;
-                        write.Send(info);
-                    }
-                }
-                if(entity.children != null)
-                {
-                    foreach(BaseEntity current in entity.children)
-                    {
-                        DoMovementSync(current, force);
-                    }
-                }
-            }
-
-            public void RefreshEntities()
-            {
-                entity.transform.hasChanged = true;
-                entity.SendNetworkUpdateImmediate();
-                entity.UpdateNetworkGroup();
-
-                if(entity.children != null)
-                {
-                    for(int i = 0; i < entity.children.Count; i++)
-                    {
-                        entity.children[i].transform.hasChanged = true;
-                        entity.children[i].SendNetworkUpdateImmediate();
-                        entity.children[i].UpdateNetworkGroup();
-                    }
-                }
             }
 
             public void OnDestroy()
