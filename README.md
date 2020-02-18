@@ -1,10 +1,14 @@
-![](https://i.imgur.com/ZsXcSLp.png)
+# FlyingCarpet for Rust (Remod original)
+
 ## Overview
 **Flying Carpet for Rust** is an Oxide plugin which allows an enabled user to spawn and ride their own flying machine.  The carpet consists of a floor rug, chair, code lock, and lantern.  The lantern is used to take off and land.
 
 There are two modes of operation depending on the permission granted to the user.  The default mode requires low-grade fuel in the lantern in order to fly.  The unlimited mode does not require fuel.
 
 For the default mode, the user will receive notification via chat message as well as an audible water pump sound when fuel is low (1 low grade fuel).  Each unit of low grade fuel gives you 10 minutes of flying time, which is the same rate of usage as the standard lantern.  When you run out of fuel, the carpet will land itself immediately.
+
+![](https://i.imgur.com/ZsXcSLp.png)
+
 ## Permissions
 
 * flyingcarpet.use -- Allows player to spawn and fly a carpet using low grade fuel
