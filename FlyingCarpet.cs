@@ -397,8 +397,7 @@ namespace Oxide.Plugins
                 activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
                 if(activecarpet == null)
                 {
-                    oven.StopCooking();
-                    return rtrn;
+                    return null;
                 }
             }
             catch
