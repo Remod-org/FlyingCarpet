@@ -39,9 +39,12 @@ Of course, you could grant, for example, unlimited use to all players:
 Configuration is done via the FlyingCarpet.json file under the oxide/config directory.  Following is the default:
 ```json
 {
+    "Allow lantern use while not seated: ": false,
+    "Allow repainting of sign: ": false,
     "ChairSkinID : ": 943293895,
     "Deploy - Enable limited FlyingCarpets per person : ": true,
     "Deploy - Limit of Carpets players can build : ": 1,
+    "Play low fuel sound : ": true,
     "Minimum Flight Altitude : ": 5.0,
     "Require Fuel to Operate : ": true,
     "RugSkinID : ": 871503616,
@@ -49,6 +52,7 @@ Configuration is done via the FlyingCarpet.json file under the oxide/config dire
     "Speed - Sprint Flight Speed is : ": 25.0
 }
 ```
+
 Note that that owner/admin can customize the skins for both the chair and the rug, set global fuel requirements and flying speed, and limit the number of carpets for each player (highly recommended).
 
 You *could* set "Require Fuel to Operate : " to false, but it is recommended that you leave this setting true and use the flyingcarpet.unlimited permission instead if you want to remove the fuel requirement.

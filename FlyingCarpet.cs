@@ -16,7 +16,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.1.4")]
+    [Info("FlyingCarpet", "RFC1920", "1.1.5")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
@@ -73,6 +73,7 @@ namespace Oxide.Plugins
                 ["carpetdestroyed"] = "Flying Carpet destroyed !!",
                 ["carpetfuel"] = "You will need fuel to fly.  Do not start without fuel !!",
                 ["carpetnofuel"] = "You have been granted unlimited fly time, no fuel required !!",
+                ["nostartseat"] = "You cannot light this lantern until seated !!",
                 ["nofuel"] = "You're out of fuel !!",
                 ["noplayer"] = "Unable to find player {0}!",
                 ["gaveplayer"] = "Gave carpet to player {0}!",
@@ -127,6 +128,8 @@ namespace Oxide.Plugins
         static bool requirefuel = true;
         static bool doublefuel = false;
         static bool nameOnSign = true;
+        static bool allowLantern = false;
+        static bool allowRepaint = false;
 
         //bool Changed = false;
 
@@ -155,6 +158,8 @@ namespace Oxide.Plugins
             CheckCfg("RugSkinID : ", ref rugSkinID);
             CheckCfg("ChairSkinID : ", ref chairSkinID);
             CheckCfg("Owner Name on Sign: ", ref nameOnSign);
+            CheckCfg("Allow repainting of sign: ", ref allowRepaint);
+            CheckCfg("Allow lantern use while not seated: ", ref allowLantern);
         }
 
         private void LoadVariables()
@@ -395,20 +400,34 @@ namespace Oxide.Plugins
             try
             {
                 activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
-                if(activecarpet == null)
-                {
-                    return null;
-                }
+                if(activecarpet == null) return null;
             }
             catch
             {
+                if(oven.GetComponentInParent<CarpetEntity>() && !allowLantern)
+                {
+#if DEBUG
+                    Puts("No player mounted on this carpet.");
+#endif
+                    PrintMsgL(player, "nostartseat"); return rtrn;
+                }
+#if DEBUG
+                Puts("No carpet or not mounted.");
+#endif
                 return null;
             }
 
             if(activecarpet.carpetlock != null && activecarpet.carpetlock.IsLocked()) { PrintMsgL(player, "carpetlocked"); return rtrn; }
             if(!player.isMounted) return rtrn; // player offline, does not mean ismounted on carpet
 
-            if(player.GetMounted() != activecarpet.entity) return rtrn; // online player not in seat on carpet
+            if(player.GetMounted() != activecarpet.entity)
+            {
+#if DEBUG
+                Puts("OnOvenToggle: Player not mounted on carpet!");
+#endif
+                oven.StopCooking();
+                return rtrn;
+            }
 #if DEBUG
             Puts("OnOvenToggle: Player cycled lantern!");
 #endif
@@ -559,7 +578,7 @@ namespace Oxide.Plugins
                 spawnpos = new Vector3(location.x, location.y + 0.5f, location.z);
             }
 
-            string staticprefab = "assets/bundled/prefabs/static/chair.invisible.static.prefab";
+            string staticprefab = "assets/bundled/prefabs/static/chair.static.prefab";
             newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
             newCarpet.name = "FlyingCarpet";
             var chairmount = newCarpet.GetComponent<BaseMountable>();
@@ -591,6 +610,10 @@ namespace Oxide.Plugins
                     int fontsize = Convert.ToInt32(Math.Floor(150f / message.Length));
                     SignArtist.Call("signText", player, carpet.sign, message, fontsize, "00FF00", "000000");
                 }
+            }
+            if(!allowRepaint)
+            {
+                carpet.sign.SetFlag(BaseEntity.Flags.Busy, true);
             }
             carpet.sign.SetFlag(BaseEntity.Flags.Locked, true);
 
@@ -925,11 +948,13 @@ namespace Oxide.Plugins
             public BasePlayer player;
             public BaseEntity sitbox;
             public BaseEntity carpet1;
+            public BaseEntity carpet2;
             public BaseEntity lantern1;
             public BaseEntity carpetlock;
             public BaseEntity lights1;
             public BaseEntity lights2;
             public BaseEntity sign;
+            public BaseEntity box;
 
             public string entname = "FlyingCarpet";
 
@@ -961,12 +986,12 @@ namespace Oxide.Plugins
             //bool isenabled = true;
             SphereCollider sphereCollider;
 
-            string prefabbox = "assets/prefabs/deployable/signs/sign.small.wood.prefab";
             string prefabcarpet = "assets/prefabs/deployable/rug/rug.deployed.prefab";
             string prefablamp = "assets/prefabs/deployable/lantern/lantern.deployed.prefab";
             string prefablights = "assets/prefabs/misc/xmas/christmas_lights/xmas.lightstring.deployed.prefab";
             string prefablock = "assets/prefabs/locks/keypad/lock.code.prefab";
             string prefabsign = "assets/prefabs/deployable/signs/sign.small.wood.prefab";
+            string prefabbox = "assets/prefabs/deployable/woodenbox/woodbox_deployed.prefab";
 
             void Awake()
             {
@@ -1011,13 +1036,15 @@ namespace Oxide.Plugins
 
             BaseEntity SpawnPart(string prefab, BaseEntity entitypart, bool setactive, int eulangx, int eulangy, int eulangz, float locposx, float locposy, float locposz, BaseEntity parent, ulong skinid)
             {
-                entitypart = new BaseEntity();
+#if DEBUG
+                Interface.Oxide.LogInfo($"SpawnPart: {prefab}, active:{setactive.ToString()}, angles:({eulangx.ToString()}, {eulangy.ToString()}, {eulangz.ToString()}), position:({locposx.ToString()}, {locposy.ToString()}, {locposz.ToString()}), parent:{parent.ShortPrefabName} skinid:{skinid.ToString()}");
+#endif
                 entitypart = GameManager.server.CreateEntity(prefab, entitypos, entityrot, setactive);
                 entitypart.transform.localEulerAngles = new Vector3(eulangx, eulangy, eulangz);
                 entitypart.transform.localPosition = new Vector3(locposx, locposy, locposz);
 
                 entitypart.SetParent(parent, 0);
-                entitypart.skinID = skinid;
+                entitypart.skinID = Convert.ToUInt64(skinid);
                 entitypart?.Spawn();
                 SpawnRefresh(entitypart);
                 return entitypart;
@@ -1062,16 +1089,20 @@ namespace Oxide.Plugins
 
             public void SpawnCarpet()
             {
-                sitbox = SpawnPart(prefabbox, sitbox, false, 90, 0, 0, -0.01f, 0.5f, -0.1f, entity, skinid);
-				sitbox.SetFlag(BaseEntity.Flags.Locked, true);
                 carpet1 = SpawnPart(prefabcarpet, carpet1, false, 0, 0, 0, 0f, 0.3f, 0f, entity, skinid);
                 carpet1.SetFlag(BaseEntity.Flags.Busy, true, true);
-				carpet1.SetFlag(BaseEntity.Flags.Locked, true);
+                carpet1.SetFlag(BaseEntity.Flags.Locked, true);
 
-                lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, 0.3f, 1f, entity, 1);
+                lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, 0.33f, 1f, entity, 1);
                 lantern1.SetFlag(BaseEntity.Flags.On, false);
                 carpetlock = SpawnPart(prefablock, carpetlock, true, 0, 90, 90, 0.5f, 0.3f, 0.7f, entity, 1);
                 sign = SpawnPart(prefabsign, sign, true, -45, 0, 0, 0, 0.25f, 1.75f, entity, 1);
+//                box  = SpawnPart(prefabbox, box, true, 0, 0, 0, 0f, 0.33f, -1f, carpet1, 1);
+
+                lights1 = SpawnPart(prefablights, lights1, true, 0, 90, 0, 0.8f, 0.31f, 0.1f, entity, 1);
+                lights1.SetFlag(BaseEntity.Flags.Busy, true);
+                lights2 = SpawnPart(prefablights, lights2, true, 0, 90, 0, -0.9f, 0.31f, 0.1f, entity, 1);
+                lights2.SetFlag(BaseEntity.Flags.Busy, true);
 
                 if(needfuel)
                 {
@@ -1085,12 +1116,6 @@ namespace Oxide.Plugins
                     // Add some fuel (1 lgf) so it lights up anyway.  It should always stay at 1.
                     SetFuel(1);
                 }
-
-                lights1 = SpawnPart(prefablights, lights1, true, 0, 90, 0, 0.8f, 0.31f, 0.1f, entity, 1);
-                lights1.SetFlag(BaseEntity.Flags.Busy, true);
-                lights2 = SpawnPart(prefablights, lights2, true, 0, 90, 0, -0.9f, 0.31f, 0.1f, entity, 1);
-                lights2.SetFlag(BaseEntity.Flags.Busy, true);
-                sitbox.SetFlag(BaseEntity.Flags.Busy, true);
             }
 
             private void OnTriggerEnter(Collider col)
