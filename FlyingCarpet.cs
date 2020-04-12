@@ -16,14 +16,14 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.1.6")]
+    [Info("FlyingCarpet", "RFC1920", "1.1.7")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
     {
         #region Load
         static LayerMask layerMask;
-        BaseEntity newCarpet;
+        static LayerMask buildingMask;
 
         static Dictionary<ulong, PlayerCarpetData> loadplayer = new Dictionary<ulong, PlayerCarpetData>();
         static List<ulong> pilotslist = new List<ulong>();
@@ -44,6 +44,7 @@ namespace Oxide.Plugins
             layerMask = (1 << 29);
             layerMask |= (1 << 18);
             layerMask = ~layerMask;
+            buildingMask = LayerMask.GetMask("Construction", "Prevent Building", "Deployed", "World");
 
             AddCovalenceCommand("fc", "cmdCarpetBuild");
             AddCovalenceCommand("fcc", "cmdCarpetCount");
@@ -579,7 +580,7 @@ namespace Oxide.Plugins
             }
 
             string staticprefab = "assets/bundled/prefabs/static/chair.static.prefab";
-            newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
+            var newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
             newCarpet.name = "FlyingCarpet";
             var chairmount = newCarpet.GetComponent<BaseMountable>();
             chairmount.isMobile = true;
@@ -1234,8 +1235,20 @@ namespace Oxide.Plugins
                         ServerMgr.Instance.StartCoroutine(RefreshTrain());
                         return;
                     }
+                    // Disallow flying forward into buildings, etc.
+                    if(Physics.Raycast(new Ray(entity.transform.position, Vector3.forward), out hit, 10f, buildingMask))
+                    {
+                        entity.transform.localPosition += transform.forward * -5f * Time.deltaTime;
+                        moveforward = false;
+                    }
+                    // Disallow flying backward into buildings, etc.
+                    else if(Physics.Raycast(new Ray(entity.transform.position, Vector3.forward * -1f), out hit, 10f, buildingMask))
+                    {
+                        entity.transform.localPosition += transform.forward * 5f * Time.deltaTime;
+                        movebackward = false;
+                    }
 
-                    float rotspeed = 1f;
+                    float rotspeed = 1.5f;
                     if(throttleup) rotspeed += 1;
                     if(rotright) entity.transform.eulerAngles += new Vector3(0, rotspeed, 0);
                     else if(rotleft) entity.transform.eulerAngles += new Vector3(0, -rotspeed, 0);
