@@ -16,7 +16,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.1.5")]
+    [Info("FlyingCarpet", "RFC1920", "1.1.6")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
@@ -1189,6 +1189,7 @@ namespace Oxide.Plugins
                     if(!GetPilot()) islanding = true;
                     var currentspeed = normalspeed;
                     if(throttleup) { currentspeed = sprintspeed; }
+                    RaycastHit hit;
 
                     // This is a little weird.  Fortunately, some of the hooks determine fuel status...
                     if(!hasFuel)
@@ -1202,8 +1203,17 @@ namespace Oxide.Plugins
                     }
                     if(islanding)
                     {
-                        entity.transform.localPosition += (transform.up * -5f) * Time.deltaTime;
-                        RaycastHit hit;
+                        if(!Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 3.5f, layerMask))
+                        {
+                            // Drop fast
+                            entity.transform.localPosition += (transform.up * -15f * Time.deltaTime);
+                        }
+                        else
+                        {
+                            // Slow down
+                            entity.transform.localPosition += (transform.up * -5f) * Time.deltaTime;
+                        }
+
                         if(Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask))
                         {
                             islanding = false;
@@ -1225,8 +1235,10 @@ namespace Oxide.Plugins
                         return;
                     }
 
-                    if(rotright) entity.transform.eulerAngles += new Vector3(0, 2, 0);
-                    else if(rotleft) entity.transform.eulerAngles += new Vector3(0, -2, 0);
+                    float rotspeed = 1f;
+                    if(throttleup) rotspeed += 1;
+                    if(rotright) entity.transform.eulerAngles += new Vector3(0, rotspeed, 0);
+                    else if(rotleft) entity.transform.eulerAngles += new Vector3(0, -rotspeed, 0);
 
                     if(moveforward) entity.transform.localPosition += ((transform.forward * currentspeed) * Time.deltaTime);
                     else if(movebackward) entity.transform.localPosition = entity.transform.localPosition - ((transform.forward * currentspeed) * Time.deltaTime);
