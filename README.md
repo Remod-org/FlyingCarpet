@@ -39,23 +39,47 @@ Of course, you could grant, for example, unlimited use to all players:
 Configuration is done via the FlyingCarpet.json file under the oxide/config directory.  Following is the default:
 ```json
 {
-    "Allow lantern use while not seated: ": false,
-    "Allow repainting of sign: ": false,
-    "ChairSkinID : ": 943293895,
-    "Deploy - Enable limited FlyingCarpets per person : ": true,
-    "Deploy - Limit of Carpets players can build : ": 1,
-    "Play low fuel sound : ": true,
-    "Minimum Flight Altitude : ": 5.0,
-    "Require Fuel to Operate : ": true,
-    "RugSkinID : ": 871503616,
-    "Speed - Normal Flight Speed is : ": 12.0,
-    "Speed - Sprint Flight Speed is : ": 25.0
+  "AllowLantern": false,
+  "AllowRepaint": true,
+  "UseMaxCarpetChecks": true,
+  "DoubleFuel": false,
+  "NameOnSign": true,
+  "PlayEmptySound": false,
+  "RequireFuel": true,
+  "MaxCarpets": 1,
+  "VIPMaxCarpets": 2,
+  "MinDistance": 10.0,
+  "MinAltitude": 5.0,
+  "NormalSpeed": 12.0,
+  "SprintSpeed": 25.0,
+  "ChairSkinID": 943293895,
+  "RugSkinID": 871503616,
+  "Version": {
+    "Major": 1,
+    "Minor": 1,
+    "Patch": 7
+  }
 }
 ```
 
+  - `AllowLantern` -- Allow lantern use while not seated (false)
+  - `AllowRepaint` -- Allow repainting of sign: (true)
+  - `UseMaxCarpetChecks` -- Deploy - Enable limited FlyingCarpets per person (true)
+  - `DoubleFuel` -- Double fuel consumption (false)
+  - `PlayEmptySound` -- Play low fuel sound (true)
+  - `RequireFuel` -- Require Fuel to Operate (true)
+  - `MaxCarpets` -- Deploy - Limit of Carpets players can build (1)
+  - `VIPMaxCarpets` -- Deploy - Limit of carpets VIP players can build (2)
+  - `MinDistance` -- Minimum distance for /fcd (10)
+  - `MinAltitude` -- Minimum Flight Altitude (5.0)
+  - `NormalSpeed` -- Normal Flight Speed (12.0)
+  - `SprintSpeed` -- Sprint Flight Speed (25.0
+  - `ChairSkinID` -- 943293895
+  - `RugSkinID` -- 871503616
+
 Note that that owner/admin can customize the skins for both the chair and the rug, set global fuel requirements and flying speed, and limit the number of carpets for each player (highly recommended).
 
-You *could* set "Require Fuel to Operate : " to false, but it is recommended that you leave this setting true and use the flyingcarpet.unlimited permission instead if you want to remove the fuel requirement.
+You *could* set "RequireFuel" to false, but it is recommended that you leave this setting true and use the flyingcarpet.unlimited permission instead if you want to remove the fuel requirement.
 
 ## Flight School
 1. Type /fc to spawn a carpet.
@@ -68,29 +92,5 @@ You *could* set "Require Fuel to Operate : " to false, but it is recommended tha
 7. Once on the ground, use the spacebar to dismount.
 8. Lock the carpet using the code lock to prevent others from using it.
 9. Use /fcd while standing next to the carpet to destroy it.
-## Localization
-English/default language:
-```json
-{
-    "helptext1": "Flying Carpet instructions:",
-    "helptext2": "  type /fc to spawn a Flying Carpet",
-    "helptext3": "  type /fcd to destroy your flyingcarpet.",
-    "helptext4": "  type /fcc to show a count of your carpets",
-    "notauthorized": "You don't have permission to do that !!",
-    "notflyingcarpet": "You are not piloting a flying carpet !!",
-    "maxcarpets": "You have reached the maximum allowed carpets",
-    "landingcarpet": "Carpet landing sequence started !!",
-    "risingcarpet": "Carpet takeoff sequence started !!",
-    "carpetlocked": "You must unlock the Carpet first !!",
-    "carpetspawned": "Flying Carpet spawned!  Don't forget to lock it !!",
-    "carpetfuel": "You will need fuel to fly.  Do not start without fuel !!",
-    "carpetnofuel": "You have been granted unlimited fly time, no fuel required !!",
-    "nofuel": "You're out of fuel !!",
-    "lowfuel": "You're low on fuel !!",
-    "nocarpets": "You have no Carpets",
-    "currcarpets": "Current Carpets : {0}"
-}
-```
-## Known Issues
-1. Lantern can be started or stopped by another player, which can cause the lantern cycle to be out of sync (off while flying).
+
 
