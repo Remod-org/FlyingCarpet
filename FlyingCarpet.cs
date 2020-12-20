@@ -30,7 +30,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.1.7")]
+    [Info("FlyingCarpet", "RFC1920", "1.1.8")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
@@ -688,14 +688,22 @@ namespace Oxide.Plugins
             }
 
             // paint sign with username
-            if(SignArtist && configData.NameOnSign)
+            if (SignArtist && configData.NameOnSign)
             {
                 // This only works with version 1.1.7 on
-                if(SignArtist.Version >= new VersionNumber(1, 1, 7))
+                if (SignArtist.Version >= new VersionNumber(1, 1, 7))
                 {
                     string message = player.displayName;
                     int fontsize = Convert.ToInt32(Math.Floor(150f / message.Length));
-                    SignArtist.Call("signText", player, carpet.sign, message, fontsize, "00FF00", "000000");
+                    try
+                    {
+                        SignArtist.Call("signText", player, carpet.sign, message, fontsize, "00FF00", "000000");
+                    }
+                    catch
+                    {
+                        // The version with this call needs to have the function modified to private to work.
+                        SignArtist.Call("API_SignText", player, carpet.sign, message, fontsize, "00FF00", "000000");
+                    }
                 }
             }
             if(!configData.AllowRepaint)
