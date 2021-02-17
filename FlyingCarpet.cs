@@ -30,7 +30,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.1.9")]
+    [Info("FlyingCarpet", "RFC1920", "1.2.0")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
@@ -67,11 +67,14 @@ namespace Oxide.Plugins
 
         void Init()
         {
+            Instance = this;
+
             LoadConfigVariables();
             layerMask = (1 << 29);
             layerMask |= (1 << 18);
             layerMask = ~layerMask;
-            buildingMask = LayerMask.GetMask("Construction", "Tree", "Rock", "Deployed", "World");
+            //buildingMask = LayerMask.GetMask("Construction", "Tree", "Rock", "Deployed", "World");
+            buildingMask = LayerMask.GetMask("Construction", "Prevent Building", "Deployed", "World", "Terrain", "Tree", "Invisible", "Default");
 
             AddCovalenceCommand("fc", "cmdCarpetBuild");
             AddCovalenceCommand("fcc", "cmdCarpetCount");
@@ -120,7 +123,6 @@ namespace Oxide.Plugins
                 ["currcarpets"] = "Current Carpets : {0}",
                 ["giveusage"] = "You need to supply a valid SteamId."
             }, this);
-            Instance = this;
         }
 
         private bool isAllowed(BasePlayer player, string perm) => permission.UserHasPermission(player.UserIDString, perm);
@@ -1020,6 +1022,7 @@ namespace Oxide.Plugins
         {
             Vector3 extents = Vector3.zero;
             string name = null;
+            bool ishapis =  ConVar.Server.level.Contains("Hapis");
 
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
@@ -1036,7 +1039,21 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
+                    if (ishapis)
+                    {
+                        var elem = Regex.Matches(monument.name, @"\w{4,}|\d{1,}");
+                        foreach (Match e in elem)
+                        {
+                            if (e.Value.Equals("MONUMENT")) continue;
+                            if (e.Value.Contains("Label")) continue;
+                            name += e.Value + " ";
+                        }
+                        name = name.Trim();
+                    }
+                    else
+                    {
+                        name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
+                    }
                 }
                 if(monPos.ContainsKey(name)) continue;
 
@@ -1073,7 +1090,7 @@ namespace Oxide.Plugins
         {
             public CarpetEntity carpet;
             public BasePlayer player;
-            public int buildingMask = LayerMask.GetMask("Construction", "Prevent Building", "Deployed", "World", "Terrain", "Tree");
+            public int buildingMask = LayerMask.GetMask("Construction", "Prevent Building", "Deployed", "World", "Terrain", "Tree", "Invisible", "Default");
 
             public uint carpetid;
             public ulong ownerid;
@@ -1296,7 +1313,7 @@ namespace Oxide.Plugins
             bool DangerFront(Vector3 tgt)
             {
                 RaycastHit hitinfo;
-                if (Physics.Raycast(current, carpet.transform.TransformDirection(Vector3.forward), out hitinfo, 4f, buildingMask))
+                if (Physics.Raycast(current, carpet.transform.TransformDirection(Vector3.forward), out hitinfo, 10f, buildingMask))
                 {
                     if (hitinfo.GetEntity() != carpet)
                     {
@@ -1520,19 +1537,17 @@ namespace Oxide.Plugins
 
             private void OnTriggerEnter(Collider col)
             {
-                var target = col.GetComponentInParent<BasePlayer>();
-                if(target != null)
+                if (col.GetComponentInParent<BasePlayer>() != null)
                 {
-                    carpetantihack.Add(target);
+                    carpetantihack.Add(col.GetComponentInParent<BasePlayer>());
                 }
             }
 
             private void OnTriggerExit(Collider col)
             {
-                var target = col.GetComponentInParent<BasePlayer>();
-                if(target != null)
+                if(col.GetComponentInParent<BasePlayer>() != null)
                 {
-                    carpetantihack.Remove(target);
+                    carpetantihack.Remove(col.GetComponentInParent<BasePlayer>());
                 }
             }
 
