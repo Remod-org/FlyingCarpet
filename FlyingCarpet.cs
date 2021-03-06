@@ -30,7 +30,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.2.0")]
+    [Info("FlyingCarpet", "RFC1920", "1.2.1")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
@@ -97,6 +97,7 @@ namespace Oxide.Plugins
                 ["helptext2"] = "  type /fc to spawn a Flying Carpet",
                 ["helptext3"] = "  type /fcd to destroy your flyingcarpet.",
                 ["helptext4"] = "  type /fcc to show a count of your carpets",
+                ["notunnel"] = "Access to spawn in tunnels has been blocked !!",
                 ["notauthorized"] = "You don't have permission to do that !!",
                 ["notfound"] = "Could not locate a carpet.  You must be within {0} meters for this!!",
                 ["notflyingcarpet"] = "You are not piloting a flying carpet !!",
@@ -187,6 +188,7 @@ namespace Oxide.Plugins
         private class ConfigData
         {
             //public bool AllowDamage = true;
+            public bool BlockInTunnel = true;
             public bool AllowLantern = false;
             public bool AllowRepaint = true;
             public bool UseMaxCarpetChecks = true;
@@ -238,6 +240,11 @@ namespace Oxide.Plugins
                 vip = true;
             }
             if(CarpetLimitReached(player, vip)) { Message(iplayer, "maxcarpets"); return; }
+            if(configData.BlockInTunnel && player.transform.position.y < 70)
+            {
+                Message(iplayer, "notunnel");
+                return;
+            }
             AddCarpet(player, player.transform.position);
         }
 
@@ -1111,17 +1118,6 @@ namespace Oxide.Plugins
             public static bool started = false;
             public bool paused;
 
-            private struct carpetInputState
-            {
-                public Vector3 movement;
-                public float throttle;
-                public float yaw;
-                public void Reset()
-                {
-                    movement = Vector3.zero;
-                }
-            }
-
             void Awake()
             {
                 Instance.DoLog($"Awake()");
@@ -1568,13 +1564,7 @@ namespace Oxide.Plugins
                 }
                 if (autopilot)
                 {
-                    moveforward = false;
-                    movebackward = false;
-                    throttleup = false;
-                    moveup = false;
-                    movedown = false;
-                    rotleft = false;
-                    rotright = false;
+                    ResetMovement();
                     if (input.IsDown(BUTTON.FORWARD)) moveforward = true;
                     if (input.IsDown(BUTTON.BACKWARD)) movebackward = true;
                     if (input.IsDown(BUTTON.SPRINT)) throttleup = false;
