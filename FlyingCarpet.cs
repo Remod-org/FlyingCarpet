@@ -1,6 +1,6 @@
 #region License (MIT)
 /*
-Copyright RFC1920 <desolationoutpostpve@gmail.com>
+Copyright 2021 RFC1920 <desolationoutpostpve@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation
 files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy,
@@ -30,7 +30,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.2.1")]
+    [Info("FlyingCarpet", "RFC1920", "1.2.2")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
@@ -110,6 +110,7 @@ namespace Oxide.Plugins
                 ["carpetfuel"] = "You will need fuel to fly.  Do not start without fuel !!",
                 ["carpetnofuel"] = "You have been granted unlimited fly time, no fuel required !!",
                 ["nostartseat"] = "You cannot light this lantern until seated !!",
+                ["nolock"] = "You cannot place a lock on carpet storage.  Lock the carpet instead.",
                 ["nofuel"] = "You're out of fuel !!",
                 ["noplayer"] = "Unable to find player {0}!",
                 ["gaveplayer"] = "Gave carpet to player {0}!",
@@ -208,8 +209,9 @@ namespace Oxide.Plugins
             public float NormalSpeed = 12;
             public float SprintSpeed = 25;
 
-            public ulong ChairSkinID = 943293895;
-            public ulong RugSkinID = 871503616;
+            //public ulong ChairSkinID = 943293895;
+            public ulong BoxSkinID = 1330214613;
+            public ulong RugSkinID = 870448575;
 
             public VersionNumber Version;
         }
@@ -226,21 +228,21 @@ namespace Oxide.Plugins
         {
             bool vip = false;
             var player = iplayer.Object as BasePlayer;
-            if(!iplayer.HasPermission("flyingcarpet.use")) { Message(iplayer, "notauthorized"); return; }
-            if(args.Length == 1)
+            if (!iplayer.HasPermission("flyingcarpet.use")) { Message(iplayer, "notauthorized"); return; }
+            if (args.Length == 1)
             {
-                if(args[0] == "guiclose")
+                if (args[0] == "guiclose")
                 {
                     CuiHelper.DestroyUi(player, FCGUM);
                     return;
                 }
             }
-            if(iplayer.HasPermission("flyingcarpet.vip"))
+            if (iplayer.HasPermission("flyingcarpet.vip"))
             {
                 vip = true;
             }
-            if(CarpetLimitReached(player, vip)) { Message(iplayer, "maxcarpets"); return; }
-            if(configData.BlockInTunnel && player.transform.position.y < 70)
+            if (CarpetLimitReached(player, vip)) { Message(iplayer, "maxcarpets"); return; }
+            if (configData.BlockInTunnel && player.transform.position.y < -70)
             {
                 Message(iplayer, "notunnel");
                 return;
@@ -252,7 +254,7 @@ namespace Oxide.Plugins
         void cmdCarpetGiveChat(IPlayer iplayer, string command, string[] args)
         {
             var player = iplayer.Object as BasePlayer;
-            if(args.Length == 0)
+            if (args.Length == 0)
             {
                 Message(iplayer, "giveusage");
                 return;
@@ -260,22 +262,22 @@ namespace Oxide.Plugins
             bool vip = false;
             string pname = args[0] == null ? null : args[0];
 
-            if(!iplayer.HasPermission("flyingcarpet.admin")) { Message(iplayer, "notauthorized"); return; }
-            if(pname == null) { Message(iplayer, "noplayer", "NAME_OR_ID"); return; }
+            if (!iplayer.HasPermission("flyingcarpet.admin")) { Message(iplayer, "notauthorized"); return; }
+            if (pname == null) { Message(iplayer, "noplayer", "NAME_OR_ID"); return; }
 
             BasePlayer Bplayer = BasePlayer.Find(pname);
-            if(Bplayer == null)
+            if (Bplayer == null)
             {
                 Message(iplayer, "noplayer", pname);
                 return;
             }
 
             var Iplayer = Bplayer.IPlayer;
-            if(Iplayer.HasPermission("flyingcarpet.vip"))
+            if (Iplayer.HasPermission("flyingcarpet.vip"))
             {
                 vip = true;
             }
-            if(CarpetLimitReached(Bplayer, vip)) { Message(iplayer, "maxcarpets"); return; }
+            if (CarpetLimitReached(Bplayer, vip)) { Message(iplayer, "maxcarpets"); return; }
             AddCarpet(Bplayer, Bplayer.transform.position);
             Message(iplayer, "gaveplayer", pname);
         }
@@ -283,20 +285,20 @@ namespace Oxide.Plugins
         [ConsoleCommand("fcgive")]
         void cmdCarpetGive(ConsoleSystem.Arg arg)
         {
-            if(arg.IsRcon)
+            if (arg.IsRcon)
             {
-                if(arg.Args == null)
+                if (arg.Args == null)
                 {
                     Puts("You need to supply a valid SteamId.");
                     return;
                 }
             }
-            else if(!HasPermission(arg, "flyingcarpet.admin"))
+            else if (!HasPermission(arg, "flyingcarpet.admin"))
             {
                 SendReply(arg, Lang("notauthorized", null, arg.Connection.player as BasePlayer));
                 return;
             }
-            else if(arg.Args == null)
+            else if (arg.Args == null)
             {
                 SendReply(arg, Lang("giveusage", null, arg.Connection.player as BasePlayer));
                 return;
@@ -305,14 +307,14 @@ namespace Oxide.Plugins
             bool vip = false;
             string pname = arg.GetString(0);
 
-            if(pname.Length < 1) { Puts("Player name or id cannot be null"); return; }
+            if (pname.Length < 1) { Puts("Player name or id cannot be null"); return; }
 
             BasePlayer Bplayer = BasePlayer.Find(pname);
-            if(Bplayer == null) { Puts($"Unable to find player '{pname}'"); return; }
+            if (Bplayer == null) { Puts($"Unable to find player '{pname}'"); return; }
 
             var Iplayer = Bplayer.IPlayer;
-            if(Iplayer.HasPermission("flyingcarpet.vip")) { vip = true; }
-            if(CarpetLimitReached(Bplayer, vip))
+            if (Iplayer.HasPermission("flyingcarpet.vip")) { vip = true; }
+            if (CarpetLimitReached(Bplayer, vip))
             {
                 Puts($"Player '{pname}' has reached maxcarpets"); return;
             }
@@ -324,8 +326,8 @@ namespace Oxide.Plugins
         void cmdCarpetCount(IPlayer iplayer, string command, string[] args)
         {
             var player = iplayer.Object as BasePlayer;
-            if(!iplayer.HasPermission("flyingcarpet.use")) { Message(iplayer, "notauthorized"); return; }
-            if(!loadplayer.ContainsKey(player.userID))
+            if (!iplayer.HasPermission("flyingcarpet.use")) { Message(iplayer, "notauthorized"); return; }
+            if (!loadplayer.ContainsKey(player.userID))
             {
                 Message(iplayer, "nocarpets");
                 return;
@@ -339,16 +341,16 @@ namespace Oxide.Plugins
         void cmdCarpetDestroy(IPlayer iplayer, string command, string[] args)
         {
             var player = iplayer.Object as BasePlayer;
-            if(!iplayer.HasPermission("flyingcarpet.use")) { Message(iplayer, "notauthorized"); return; }
+            if (!iplayer.HasPermission("flyingcarpet.use")) { Message(iplayer, "notauthorized"); return; }
 
             string target = null;
-            if(args.Length > 0)
+            if (args.Length > 0)
             {
                 target = args[0];
             }
-            if(iplayer.HasPermission("flyingcarpet.admin") && target != null)
+            if (iplayer.HasPermission("flyingcarpet.admin") && target != null)
             {
-                if(target == "all")
+                if (target == "all")
                 {
                     DestroyAllCarpets(player);
                     return;
@@ -379,7 +381,7 @@ namespace Oxide.Plugins
         void cmdCarpetHelp(IPlayer iplayer, string command, string[] args)
         {
             var player = iplayer.Object as BasePlayer;
-            if(!iplayer.HasPermission("flyingcarpet.use")) { Message(iplayer, "notauthorized"); return; }
+            if (!iplayer.HasPermission("flyingcarpet.use")) { Message(iplayer, "notauthorized"); return; }
             Message(iplayer, "helptext1");
             Message(iplayer, "helptext2");
             Message(iplayer, "helptext3");
@@ -409,9 +411,9 @@ namespace Oxide.Plugins
 
 			Vector3 target = new Vector3();
 			string monname = null;
-			for(int i = 1; i < args.Length; i++)
-			{
-				monname += args[i] + " ";
+            for (int i = 1; i < args.Length; i++)
+            {
+                monname += args[i] + " ";
 			}
 			monname = monname.Trim();
             Puts($"Flying from {player.transform.position.ToString()} to {target.ToString()}");
@@ -433,7 +435,7 @@ namespace Oxide.Plugins
         #region GUI
         private void ShowTopGUI(BasePlayer player, string target = "")
         {
-            if(player == null) return;
+            if (player == null) return;
             CuiHelper.DestroyUi(player, FCGUI);
             if (target == "") target = Lang("menu");
 
@@ -445,7 +447,7 @@ namespace Oxide.Plugins
 
         private void ShowMenuGUI(BasePlayer player, string mode = null, string extra = null)
         {
-            if(player == null) return;
+            if (player == null) return;
             CuiHelper.DestroyUi(player, FCGUM);
 
             CuiElementContainer container = UI.Container(FCGUM, UI.Color("222222", 0.9f), "0.3 0.3", "0.7 0.7", true, "Overlay");
@@ -457,7 +459,7 @@ namespace Oxide.Plugins
             float[] posb = new float[4];
             foreach (KeyValuePair<string, Vector3> mons in monPos)
             {
-                if(row > 10)
+                if (row > 10)
                 {
                     row = 0;
                     col++;
@@ -515,11 +517,11 @@ namespace Oxide.Plugins
             try
             {
                 activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
-                if(activecarpet == null) return null;
+                if (activecarpet == null) return null;
             }
             catch
             {
-                if(oven.GetComponentInParent<CarpetEntity>() && !configData.AllowLantern)
+                if (oven.GetComponentInParent<CarpetEntity>() && !configData.AllowLantern)
                 {
                     DoLog("No player mounted on this carpet.");
                     Message(player.IPlayer, "nostartseat"); return rtrn;
@@ -528,17 +530,17 @@ namespace Oxide.Plugins
                 return null;
             }
 
-            if(activecarpet.carpetlock != null && activecarpet.carpetlock.IsLocked()) { Message(player.IPlayer, "carpetlocked"); return rtrn; }
-            if(!player.isMounted) return rtrn; // player offline, does not mean ismounted on carpet
+            if (activecarpet.carpetlock != null && activecarpet.carpetlock.IsLocked()) { Message(player.IPlayer, "carpetlocked"); return rtrn; }
+            if (!player.isMounted) return rtrn; // player offline, does not mean ismounted on carpet
 
-            if(player.GetMounted() != activecarpet.entity)
+            if (player.GetMounted() != activecarpet.entity)
             {
                 DoLog("OnOvenToggle: Player not mounted on carpet!");
                 oven.StopCooking();
                 return rtrn;
             }
             DoLog("OnOvenToggle: Player cycled lantern!");
-            if(oven.IsOn())
+            if (oven.IsOn())
             {
                 oven.StopCooking();
             }
@@ -546,9 +548,9 @@ namespace Oxide.Plugins
             {
                 oven.StartCooking();
             }
-            if(!activecarpet.FuelCheck())
+            if (!activecarpet.FuelCheck())
             {
-                if(activecarpet.needfuel)
+                if (activecarpet.needfuel)
                 {
                     Message(player.IPlayer, "nofuel");
                     Message(player.IPlayer, "landingcarpet");
@@ -556,8 +558,8 @@ namespace Oxide.Plugins
                 }
             }
             var ison = activecarpet.engineon;
-            if(ison) { activecarpet.islanding = true; Message(player.IPlayer, "landingcarpet"); return null; }
-            if(!ison) { AddPlayerToPilotsList(player); activecarpet.engineon = true; return null; }
+            if (ison) { activecarpet.islanding = true; Message(player.IPlayer, "landingcarpet"); return null; }
+            if (!ison) { AddPlayerToPilotsList(player); activecarpet.engineon = true; return null; }
 
             return rtrn;
         }
@@ -566,16 +568,16 @@ namespace Oxide.Plugins
         void OnFuelConsume(BaseOven oven, Item fuel, ItemModBurnable burnable)
         {
             // Only work on lanterns
-            if(oven.ShortPrefabName != "lantern.deployed") return;
+            if (oven.ShortPrefabName != "lantern.deployed") return;
             int dbl = configData.DoubleFuel ? 4 : 2;
 
             BaseEntity lantern = oven as BaseEntity;
             // Only work on lanterns attached to a Carpet
             var activecarpet = lantern.GetComponentInParent<CarpetEntity>() ?? null;
-            if(activecarpet == null) return;
+            if (activecarpet == null) return;
             DoLog("OnConsumeFuel: found a carpet lantern!");
 
-            if(activecarpet.needfuel)
+            if (activecarpet.needfuel)
             {
                 DoLog("OnConsumeFuel: carpet requires fuel!");
             }
@@ -586,30 +588,30 @@ namespace Oxide.Plugins
                 return;
             }
             BasePlayer player = activecarpet.GetComponent<BaseMountable>().GetMounted() as BasePlayer;
-            if(!player) return;
+            if (!player) return;
             DoLog("OnConsumeFuel: checking fuel level...");
             // Before it drops to 1 (3 for doublefuel) AFTER this hook call is complete, warn them that the fuel is low (1) - ikr
-            if(fuel.amount == dbl)
+            if (fuel.amount == dbl)
             {
                 DoLog("OnConsumeFuel: sending low fuel warning...");
-                if(configData.PlayEmptySound)
+                if (configData.PlayEmptySound)
                 {
                     Effect.server.Run("assets/bundled/prefabs/fx/well/pump_down.prefab", player.transform.position);
                 }
                 Message(player.IPlayer, "lowfuel");
             }
 
-            if(configData.DoubleFuel)
+            if (configData.DoubleFuel)
             {
                 fuel.amount--;
             }
 
-            if(fuel.amount == 0)
+            if (fuel.amount == 0)
             {
                 DoLog("OnConsumeFuel: out of fuel.");
                 Message(player.IPlayer, "lowfuel");
                 var ison = activecarpet.engineon;
-                if(ison)
+                if (ison)
                 {
                     activecarpet.islanding = true;
                     activecarpet.engineon = false;
@@ -624,12 +626,12 @@ namespace Oxide.Plugins
         private object OnNightLanternToggle(BaseEntity entity, bool status)
         {
             // Only work on lanterns
-            if(entity.ShortPrefabName != "lantern.deployed") return null;
+            if (entity.ShortPrefabName != "lantern.deployed") return null;
             DoLog("OnNightLanternToggle: Called on a lantern.  Checking for carpet...");
 
             // Only work on lanterns attached to a Carpet
             var activecarpet = entity.GetComponentInParent<CarpetEntity>() ?? null;
-            if(activecarpet != null)
+            if (activecarpet != null)
             {
                 DoLog("OnNightLanternToggle: Do not cycle this lantern!");
                 return true;
@@ -648,19 +650,19 @@ namespace Oxide.Plugins
 
         private void AddCarpet(BasePlayer player, Vector3 location)
         {
-            if(player == null && location == null) return;
-            if(location == null && player != null) location = player.transform.position;
+            if (player == null && location == null) return;
+            if (location == null && player != null) location = player.transform.position;
             Vector3 spawnpos = new Vector3();
 
             // Set initial default for fuel requirement based on config
             bool needfuel = configData.RequireFuel;
-            if(isAllowed(player, "flyingcarpet.unlimited"))
+            if (isAllowed(player, "flyingcarpet.unlimited"))
             {
                 // User granted unlimited fly time without fuel
                 needfuel = false;
             }
 
-            if(needfuel)
+            if (needfuel)
             {
                 // Don't put them on the carpet since they need to fuel up first
                 spawnpos = player.transform.position + -player.transform.forward * 2f + new Vector3(0, 1f, 0);
@@ -671,37 +673,37 @@ namespace Oxide.Plugins
                 spawnpos = new Vector3(location.x, location.y + 0.5f, location.z);
             }
 
-            string staticprefab = "assets/bundled/prefabs/static/chair.static.prefab";
+            string staticprefab = "assets/bundled/prefabs/static/chair.invisible.static.prefab";
             var newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
             newCarpet.name = "FlyingCarpet";
             var chairmount = newCarpet.GetComponent<BaseMountable>();
             chairmount.isMobile = true;
             newCarpet.enableSaving = false;
             newCarpet.OwnerID = player.userID;
-            newCarpet.skinID = configData.ChairSkinID;
+            //newCarpet.skinID = Convert.ToUInt64(configData.ChairSkinID);
             newCarpet.Spawn();
             var carpet = newCarpet.gameObject.AddComponent<CarpetEntity>();
             carpet.needfuel = needfuel;
             // Unlock the tank if they need fuel.
             carpet.lantern1.SetFlag(BaseEntity.Flags.Locked, !needfuel);
-            if(needfuel)
+            if (needfuel)
             {
                 // We have to set this after the spawn.
                 carpet.SetFuel(0);
             }
 
             // paint sign with username
-            if(SignArtist && configData.NameOnSign)
+            if (SignArtist && configData.NameOnSign)
             {
                 // This only works with version 1.1.7 on
-                if(SignArtist.Version >= new VersionNumber(1, 1, 7))
+                if (SignArtist.Version >= new VersionNumber(1, 1, 7))
                 {
                     string message = player.displayName;
                     int fontsize = Convert.ToInt32(Math.Floor(150f / message.Length));
-                    SignArtist.Call("signText", player, carpet.sign, message, fontsize, "00FF00", "000000");
+                    SignArtist?.Call("API_SignText", player, carpet.sign, message, fontsize, "00FF00", "000000");
                 }
             }
-            if(!configData.AllowRepaint)
+            if (!configData.AllowRepaint)
             {
                 carpet.sign.SetFlag(BaseEntity.Flags.Busy, true);
             }
@@ -709,10 +711,10 @@ namespace Oxide.Plugins
 
             AddPlayerID(player.userID);
 
-            if(chairmount != null && player != null)
+            if (chairmount != null && player != null)
             {
                 Message(player.IPlayer, "carpetspawned");
-                if(carpet.needfuel)
+                if (carpet.needfuel)
                 {
                     Message(player.IPlayer, "carpetfuel");
                 }
@@ -728,19 +730,19 @@ namespace Oxide.Plugins
 
         public bool PilotListContainsPlayer(BasePlayer player)
         {
-            if(pilotslist.Contains(player.userID)) return true;
+            if (pilotslist.Contains(player.userID)) return true;
             return false;
         }
 
         void AddPlayerToPilotsList(BasePlayer player)
         {
-            if(PilotListContainsPlayer(player)) return;
+            if (PilotListContainsPlayer(player)) return;
             pilotslist.Add(player.userID);
         }
 
         public void RemovePlayerFromPilotsList(BasePlayer player)
         {
-            if(PilotListContainsPlayer(player))
+            if (PilotListContainsPlayer(player))
             {
                 pilotslist.Remove(player.userID);
                 return;
@@ -749,23 +751,23 @@ namespace Oxide.Plugins
 
         void DestroyLocalCarpet(BasePlayer player)
         {
-            if(player == null) return;
+            if (player == null) return;
             List<BaseEntity> carpetlist = new List<BaseEntity>();
             Vis.Entities(player.transform.position, configData.MinDistance, carpetlist);
             bool foundcarpet = false;
 
-            foreach(BaseEntity p in carpetlist)
+            foreach (BaseEntity p in carpetlist)
             {
                 var foundent = p.GetComponentInParent<CarpetEntity>() ?? null;
-                if(foundent != null)
+                if (foundent != null)
                 {
                     foundcarpet = true;
-                    if(foundent.ownerid != player.userID) return;
+                    if (foundent.ownerid != player.userID) return;
                     foundent.entity.Kill(BaseNetworkable.DestroyMode.Gib);
                     Message(player.IPlayer, "carpetdestroyed");
                 }
             }
-            if(!foundcarpet)
+            if (!foundcarpet)
             {
                 Message(player.IPlayer, "notfound", configData.MinDistance.ToString());
             }
@@ -777,17 +779,17 @@ namespace Oxide.Plugins
             Vis.Entities(new Vector3(0,0,0), 3500f, carpetlist);
             bool foundcarpet = false;
 
-            foreach(BaseEntity p in carpetlist)
+            foreach (BaseEntity p in carpetlist)
             {
                 var foundent = p.GetComponentInParent<CarpetEntity>() ?? null;
-                if(foundent != null)
+                if (foundent != null)
                 {
                     foundcarpet = true;
                     foundent.entity.Kill(BaseNetworkable.DestroyMode.Gib);
                     Message(player.IPlayer, "carpetdestroyed");
                 }
             }
-            if(!foundcarpet)
+            if (!foundcarpet)
             {
                 Message(player.IPlayer, "notfound", configData.MinDistance.ToString());
             }
@@ -795,23 +797,23 @@ namespace Oxide.Plugins
 
         void DestroyRemoteCarpet(BasePlayer player)
         {
-            if(player == null) return;
+            if (player == null) return;
             List<BaseEntity> carpetlist = new List<BaseEntity>();
             Vis.Entities(new Vector3(0,0,0), 3500f, carpetlist);
             bool foundcarpet = false;
 
-            foreach(BaseEntity p in carpetlist)
+            foreach (BaseEntity p in carpetlist)
             {
                 var foundent = p.GetComponentInParent<CarpetEntity>() ?? null;
-                if(foundent != null)
+                if (foundent != null)
                 {
                     foundcarpet = true;
-                    if(foundent.ownerid != player.userID) return;
+                    if (foundent.ownerid != player.userID) return;
                     foundent.entity.Kill(BaseNetworkable.DestroyMode.Gib);
                     Message(player.IPlayer, "carpetdestroyed");
                 }
             }
-            if(!foundcarpet)
+            if (!foundcarpet)
             {
                 Message(player.IPlayer, "notfound", configData.MinDistance.ToString());
             }
@@ -819,16 +821,16 @@ namespace Oxide.Plugins
 
         void OnPlayerInput(BasePlayer player, InputState input)
         {
-            if(player == null || input == null) return;
-            if(!player.isMounted) return;
+            if (player == null || input == null) return;
+            if (!player.isMounted) return;
 
-            //if(input.current.buttons > 1 && configData.debugMovement)
+            //if (input.current.buttons > 1 && configData.debugMovement)
             //    Puts($"OnPlayerInput: {input.current.buttons}");
 
             var activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
-            if(activecarpet == null) return;
-            if(player.GetMounted() != activecarpet.entity) return;
-            if(input != null)
+            if (activecarpet == null) return;
+            if (player.GetMounted() != activecarpet.entity) return;
+            if (input != null)
             {
                 activecarpet.CarpetInput(input, player);
             }
@@ -837,32 +839,32 @@ namespace Oxide.Plugins
 
         void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
-            if(entity == null || hitInfo == null) return;
+            if (entity == null || hitInfo == null) return;
             var iscarpet = entity.GetComponentInParent<CarpetEntity>() ?? null;
-            if(iscarpet != null) hitInfo.damageTypes.ScaleAll(0);
+            if (iscarpet != null) hitInfo.damageTypes.ScaleAll(0);
             return;
         }
 
         object OnEntityGroundMissing(BaseEntity entity)
         {
             var iscarpet = entity.GetComponentInParent<CarpetEntity>() ?? null;
-            if(iscarpet != null) return false;
+            if (iscarpet != null) return false;
             return null;
         }
 
         bool CarpetLimitReached(BasePlayer player, bool vip=false)
         {
-            if(configData.UseMaxCarpetChecks)
+            if (configData.UseMaxCarpetChecks)
             {
-                if(loadplayer.ContainsKey(player.userID))
+                if (loadplayer.ContainsKey(player.userID))
                 {
                     var currentcount = loadplayer[player.userID].carpetcount;
                     int maxallowed = configData.MaxCarpets;
-                    if(vip)
+                    if (vip)
                     {
                         maxallowed = configData.VIPMaxCarpets;
                     }
-                    if(currentcount >= maxallowed) return true;
+                    if (currentcount >= maxallowed) return true;
                 }
             }
             return false;
@@ -878,10 +880,10 @@ namespace Oxide.Plugins
         void OnEntityMounted(BaseMountable mountable, BasePlayer player)
         {
             var activecarpet = mountable.GetComponentInParent<CarpetEntity>() ?? null;
-            if(activecarpet != null)
+            if (activecarpet != null)
             {
                 DoLog("OnEntityMounted: player mounted copter!");
-                if(mountable.GetComponent<BaseEntity>() != activecarpet.entity) return;
+                if (mountable.GetComponent<BaseEntity>() != activecarpet.entity) return;
                 activecarpet.lantern1.SetFlag(BaseEntity.Flags.On, false);
                 ShowTopGUI(player);
             }
@@ -890,28 +892,28 @@ namespace Oxide.Plugins
         void OnEntityDismounted(BaseMountable mountable, BasePlayer player)
         {
             var activecarpet = mountable.GetComponentInParent<CarpetEntity>() ?? null;
-            if(activecarpet != null)
+            if (activecarpet != null)
             {
                 DoLog("OnEntityMounted: player dismounted copter!");
                 CuiHelper.DestroyUi(player, FCGUI);
-                if(mountable.GetComponent<BaseEntity>() != activecarpet.entity) return;
+                if (mountable.GetComponent<BaseEntity>() != activecarpet.entity) return;
             }
         }
 
         private object CanLootEntity(BasePlayer player, StorageContainer container)
         {
-            if(container == null || player == null) return null;
+            if (container == null || player == null) return null;
             var iscarpet = container.GetComponentInParent<CarpetEntity>() ?? null;
-            if(iscarpet != null)
+            if (iscarpet != null)
             {
-                if(iscarpet.carpetlock != null && iscarpet.carpetlock.IsLocked()) return false;
+                if (iscarpet.carpetlock != null && iscarpet.carpetlock.IsLocked()) return false;
             }
             return null;
         }
 
         private object CanPickupEntity(BasePlayer player, BaseCombatEntity entity)
         {
-            if(entity == null || player == null) return null;
+            if (entity == null || player == null) return null;
 
             BaseEntity myent = entity as BaseEntity;
             string myparent = null;
@@ -921,7 +923,7 @@ namespace Oxide.Plugins
             }
             catch {}
 
-            if(myparent == "FlyingCarpet" || myent.name == "FlyingCarpet")
+            if (myparent == "FlyingCarpet" || myent.name == "FlyingCarpet")
             {
                 if (configData.debug)
                 {
@@ -941,9 +943,33 @@ namespace Oxide.Plugins
             return null;
         }
 
+        // Check for our coffin, block adding another lock
+        private object CanDeployItem(BasePlayer player, Deployer deployer, uint entityId)
+        {
+            if (entityId == 0 || player == null) return null;
+            string myparent = null;
+            try
+            {
+                var myent = BaseNetworkable.serverEntities.Find(entityId);
+                myparent = myent.GetParentEntity().name;
+                Puts(myparent);
+            }
+            catch {}
+
+            if (myparent == "FlyingCarpet")
+            {
+#if DEBUG
+                Puts($"Player {player.displayName} trying to place an item(lock?) on carpet storage!");
+#endif
+                Message(player.IPlayer, "nolock");
+                return true;
+            }
+
+            return null;
+        }
         private object CanPickupLock(BasePlayer player, BaseLock baseLock)
         {
-            if(baseLock == null || player == null) return null;
+            if (baseLock == null || player == null) return null;
 
             BaseEntity myent = baseLock as BaseEntity;
             string myparent = null;
@@ -953,7 +979,7 @@ namespace Oxide.Plugins
             }
             catch {}
 
-            if(myparent == "FlyingCarpet")
+            if (myparent == "FlyingCarpet")
             {
                 DoLog("CanPickupLock: player trying to remove lock from a carpet!");
                 Message(player.IPlayer, "notauthorized");
@@ -964,7 +990,7 @@ namespace Oxide.Plugins
 
         void AddPlayerID(ulong ownerid)
         {
-            if(!loadplayer.ContainsKey(ownerid))
+            if (!loadplayer.ContainsKey(ownerid))
             {
                 loadplayer.Add(ownerid, new PlayerCarpetData
                 {
@@ -977,7 +1003,7 @@ namespace Oxide.Plugins
 
         void RemovePlayerID(ulong ownerid)
         {
-            if(loadplayer.ContainsKey(ownerid)) loadplayer[ownerid].carpetcount = loadplayer[ownerid].carpetcount - 1;
+            if (loadplayer.ContainsKey(ownerid)) loadplayer[ownerid].carpetcount = loadplayer[ownerid].carpetcount - 1;
             return;
         }
 
@@ -1006,9 +1032,9 @@ namespace Oxide.Plugins
         void DestroyAll<T>()
         {
             var objects = GameObject.FindObjectsOfType(typeof(T));
-            if(objects != null)
+            if (objects != null)
             {
-                foreach(var gameObj in objects)
+                foreach (var gameObj in objects)
                 {
                     GameObject.Destroy(gameObj);
                 }
@@ -1018,7 +1044,7 @@ namespace Oxide.Plugins
         void Unload()
         {
             DestroyAll<CarpetEntity>();
-            foreach(BasePlayer player in BasePlayer.activePlayerList)
+            foreach (BasePlayer player in BasePlayer.activePlayerList)
             {
                 CuiHelper.DestroyUi(player, FCGUI);
                 CuiHelper.DestroyUi(player, FCGUM);
@@ -1036,11 +1062,11 @@ namespace Oxide.Plugins
                 if (monument.name.Contains("power_sub")) continue;// || monument.name.Contains("cave")) continue;
                 name = null;
 
-                if(monument.name == "OilrigAI")
+                if (monument.name == "OilrigAI")
                 {
                     name = "Small Oilrig";
                 }
-                else if(monument.name == "OilrigAI2")
+                else if (monument.name == "OilrigAI2")
                 {
                     name = "Large Oilrig";
                 }
@@ -1062,7 +1088,7 @@ namespace Oxide.Plugins
                         name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
                     }
                 }
-                if(monPos.ContainsKey(name)) continue;
+                if (monPos.ContainsKey(name)) continue;
 
                 extents = monument.Bounds.extents;
 
@@ -1086,8 +1112,8 @@ namespace Oxide.Plugins
 
         object OnPlayerViolation(BasePlayer player, AntiHackType type, float amount)
         {
-            if(player == null) return null;
-            if(carpetantihack.Contains(player)) return false;
+            if (player == null) return null;
+            if (carpetantihack.Contains(player)) return false;
             return null;
         }
         #endregion
@@ -1210,7 +1236,7 @@ namespace Oxide.Plugins
                     }
                 }
 
-                if(!frontcrash && !toolow && !above)
+                if (!frontcrash && !toolow && !above)
                 {
                     // Move Forward Fast
                     message.buttons += 130;
@@ -1229,7 +1255,7 @@ namespace Oxide.Plugins
                 float targetHeight = terrainHeight + Instance.configData.CruiseAltitude;
 
                 RaycastHit hitinfo;
-                if(Physics.Raycast(current, Vector3.down, out hitinfo, 100f, LayerMask.GetMask("Water")))
+                if (Physics.Raycast(current, Vector3.down, out hitinfo, 100f, LayerMask.GetMask("Water")))
                 {
                     if (TerrainMeta.WaterMap.GetHeight(hitinfo.point) < terrainHeight)
                     {
@@ -1335,7 +1361,7 @@ namespace Oxide.Plugins
             {
                 RaycastHit hitinfo;
                 int groundLayer = LayerMask.GetMask("Construction", "Terrain", "World", "Water");
-                if(Physics.Raycast(current, Vector3.down, out hitinfo, 10f, groundLayer) || Physics.Raycast(current, Vector3.up, out hitinfo, 10f, groundLayer))
+                if (Physics.Raycast(current, Vector3.down, out hitinfo, 10f, groundLayer) || Physics.Raycast(current, Vector3.up, out hitinfo, 10f, groundLayer))
                 {
                     if (hitinfo.GetEntity() != carpet)
                     {
@@ -1360,7 +1386,6 @@ namespace Oxide.Plugins
             public BaseEntity lights1;
             public BaseEntity lights2;
             public BaseEntity sign;
-            public BaseEntity box;
 
             public CarpetNav nav;
             public string entname = "FlyingCarpet";
@@ -1416,7 +1441,7 @@ namespace Oxide.Plugins
                 engineon = false;
                 hasFuel = false;
                 //needfuel = requirefuel;
-                if(!needfuel)
+                if (!needfuel)
                 {
                     hasFuel = true;
                 }
@@ -1454,25 +1479,27 @@ namespace Oxide.Plugins
                     Interface.Oxide.LogInfo($"SpawnPart: {prefab}, active:{setactive.ToString()}, angles:({eulangx.ToString()}, {eulangy.ToString()}, {eulangz.ToString()}), position:({locposx.ToString()}, {locposy.ToString()}, {locposz.ToString()}), parent:{parent.ShortPrefabName} skinid:{skinid.ToString()}");
                 }
                 entitypart = GameManager.server.CreateEntity(prefab, entitypos, entityrot, setactive);
-                entitypart.transform.localEulerAngles = new Vector3(eulangx, eulangy, eulangz);
-                entitypart.transform.localPosition = new Vector3(locposx, locposy, locposz);
-
-                entitypart.SetParent(parent, 0);
+                //Instance.Puts($"Setting skinid of {prefab} to {skinid.ToString()}");
                 entitypart.skinID = Convert.ToUInt64(skinid);
                 entitypart?.Spawn();
                 SpawnRefresh(entitypart);
+
+                entitypart.transform.localEulerAngles = new Vector3(eulangx, eulangy, eulangz);
+                entitypart.transform.localPosition = new Vector3(locposx, locposy, locposz);
+                entitypart.SetParent(parent, 0);
+
                 return entitypart;
             }
 
             void SpawnRefresh(BaseEntity entity)
             {
                 var hasstab = entity.GetComponent<StabilityEntity>() ?? null;
-                if(hasstab != null)
+                if (hasstab != null)
                 {
                     hasstab.grounded = true;
                 }
                 var hasmount = entity.GetComponent<BaseMountable>() ?? null;
-                if(hasmount != null)
+                if (hasmount != null)
                 {
                     hasmount.isMobile = true;
                 }
@@ -1483,9 +1510,9 @@ namespace Oxide.Plugins
                 BaseOven lanternCont = lantern1 as BaseOven;
                 ItemContainer container1 = lanternCont.inventory;
 
-                if(amount == 0)
+                if (amount == 0)
                 {
-                    while(container1.itemList.Count > 0)
+                    while (container1.itemList.Count > 0)
                     {
                         var item = container1.itemList[0];
                         item.RemoveFromContainer();
@@ -1507,6 +1534,8 @@ namespace Oxide.Plugins
                 carpet1.SetFlag(BaseEntity.Flags.Busy, true, true);
                 carpet1.SetFlag(BaseEntity.Flags.Locked, true);
 
+                sitbox = SpawnPart(prefabbox, carpet1, false, 0, 90, 0, 0f, 0f, 0f, entity, Instance.configData.BoxSkinID);
+
                 lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, 0.33f, 1f, entity, 1);
                 lantern1.SetFlag(BaseEntity.Flags.On, false);
                 carpetlock = SpawnPart(prefablock, carpetlock, true, 0, 90, 90, 0.5f, 0.3f, 0.7f, entity, 1);
@@ -1517,7 +1546,7 @@ namespace Oxide.Plugins
                 lights2 = SpawnPart(prefablights, lights2, true, 0, 90, 0, -0.9f, 0.31f, 0.1f, entity, 1);
                 lights2.SetFlag(BaseEntity.Flags.Busy, true);
 
-                if(needfuel)
+                if (needfuel)
                 {
                     // Empty tank
                     SetFuel(0);
@@ -1541,7 +1570,7 @@ namespace Oxide.Plugins
 
             private void OnTriggerExit(Collider col)
             {
-                if(col.GetComponentInParent<BasePlayer>() != null)
+                if (col.GetComponentInParent<BasePlayer>() != null)
                 {
                     carpetantihack.Remove(col.GetComponentInParent<BasePlayer>());
                 }
@@ -1596,13 +1625,13 @@ namespace Oxide.Plugins
 
             public bool FuelCheck()
             {
-                if(!needfuel)
+                if (!needfuel)
                 {
                     return true;
                 }
                 BaseOven lantern = lantern1 as BaseOven;
                 Item slot = lantern.inventory.GetSlot(0);
-                if(slot == null)
+                if (slot == null)
                 {
                     islanding = true;
                     hasFuel = false;
@@ -1617,31 +1646,31 @@ namespace Oxide.Plugins
 
             void Update()
             {
-                if(showmenu)
+                if (showmenu)
                 {
                     nav.paused = true;
                     Instance.ShowMenuGUI(GetPilot());
                 }
-                if(engineon)
+                if (engineon)
                 {
                     if (!GetPilot()) islanding = true;
                     var currentspeed = normalspeed;
-                    if(throttleup) { currentspeed = sprintspeed; }
+                    if (throttleup) { currentspeed = sprintspeed; }
                     RaycastHit hit;
 
                     // This is a little weird.  Fortunately, some of the hooks determine fuel status...
-                    if(!hasFuel)
+                    if (!hasFuel)
                     {
-                        if(needfuel)
+                        if (needfuel)
                         {
                             islanding = false;
                             engineon = false;
                             return;
                         }
                     }
-                    if(islanding)
+                    if (islanding)
                     {
-                        if(!Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 3.5f, layerMask))
+                        if (!Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 3.5f, layerMask))
                         {
                             // Drop fast
                             entity.transform.localPosition += (transform.up * -15f * Time.deltaTime);
@@ -1652,11 +1681,11 @@ namespace Oxide.Plugins
                             entity.transform.localPosition += (transform.up * -5f) * Time.deltaTime;
                         }
 
-                        if(Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask))
+                        if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask))
                         {
                             islanding = false;
                             engineon = false;
-                            if(pilotslist.Contains(player.userID))
+                            if (pilotslist.Contains(player.userID))
                             {
                                 pilotslist.Remove(player.userID);
                             }
@@ -1693,15 +1722,15 @@ namespace Oxide.Plugins
                     }
 
                     float rotspeed = 0.1f;
-                    if(throttleup) rotspeed += 0.25f;
-                    if(rotright) entity.transform.eulerAngles += new Vector3(0, rotspeed, 0);
-                    else if(rotleft) entity.transform.eulerAngles += new Vector3(0, -rotspeed, 0);
+                    if (throttleup) rotspeed += 0.25f;
+                    if (rotright) entity.transform.eulerAngles += new Vector3(0, rotspeed, 0);
+                    else if (rotleft) entity.transform.eulerAngles += new Vector3(0, -rotspeed, 0);
 
-                    if(moveforward) entity.transform.localPosition += ((transform.forward * currentspeed) * Time.deltaTime);
-                    else if(movebackward) entity.transform.localPosition = entity.transform.localPosition - ((transform.forward * currentspeed) * Time.deltaTime);
+                    if (moveforward) entity.transform.localPosition += ((transform.forward * currentspeed) * Time.deltaTime);
+                    else if (movebackward) entity.transform.localPosition = entity.transform.localPosition - ((transform.forward * currentspeed) * Time.deltaTime);
 
-                    if(moveup) entity.transform.localPosition += ((transform.up * currentspeed) * Time.deltaTime);
-                    else if(movedown) entity.transform.localPosition += ((transform.up * -currentspeed) * Time.deltaTime);
+                    if (moveup) entity.transform.localPosition += ((transform.up * currentspeed) * Time.deltaTime);
+                    else if (movedown) entity.transform.localPosition += ((transform.up * -currentspeed) * Time.deltaTime);
 
                     ServerMgr.Instance.StartCoroutine(RefreshTrain());
                 }
@@ -1710,7 +1739,7 @@ namespace Oxide.Plugins
             private IEnumerator RefreshTrain()
             {
                 entity.transform.hasChanged = true;
-                for(int i = 0; i < entity.children.Count; i++)
+                for (int i = 0; i < entity.children.Count; i++)
                 {
                     entity.children[i].transform.hasChanged = true;
                     entity.children[i].SendNetworkUpdateImmediate();
@@ -1734,8 +1763,8 @@ namespace Oxide.Plugins
 
             public void OnDestroy()
             {
-                if(loadplayer.ContainsKey(ownerid)) loadplayer[ownerid].carpetcount = loadplayer[ownerid].carpetcount - 1;
-                if(entity != null) { entity.Invoke("KillMessage", 0.1f); }
+                if (loadplayer.ContainsKey(ownerid)) loadplayer[ownerid].carpetcount = loadplayer[ownerid].carpetcount - 1;
+                if (entity != null) { entity.Invoke("KillMessage", 0.1f); }
             }
         }
 
@@ -1835,7 +1864,7 @@ namespace Oxide.Plugins
             }
             public static string Color(string hexColor, float alpha)
             {
-                if(hexColor.StartsWith("#"))
+                if (hexColor.StartsWith("#"))
                 {
                     hexColor = hexColor.Substring(1);
                 }
