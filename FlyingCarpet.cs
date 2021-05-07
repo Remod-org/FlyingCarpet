@@ -210,7 +210,7 @@ namespace Oxide.Plugins
             public float SprintSpeed = 25;
 
             public ulong BoxSkinID = 1330214613;
-            public ulong RugSkinID = 871503616;
+            public ulong RugSkinID = 870448575;
 
             public VersionNumber Version;
         }
