@@ -30,7 +30,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.2.2")]
+    [Info("FlyingCarpet", "RFC1920", "1.2.3")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     class FlyingCarpet : RustPlugin
@@ -209,9 +209,8 @@ namespace Oxide.Plugins
             public float NormalSpeed = 12;
             public float SprintSpeed = 25;
 
-            //public ulong ChairSkinID = 943293895;
             public ulong BoxSkinID = 1330214613;
-            public ulong RugSkinID = 870448575;
+            public ulong RugSkinID = 871503616;
 
             public VersionNumber Version;
         }
@@ -680,7 +679,6 @@ namespace Oxide.Plugins
             chairmount.isMobile = true;
             newCarpet.enableSaving = false;
             newCarpet.OwnerID = player.userID;
-            //newCarpet.skinID = Convert.ToUInt64(configData.ChairSkinID);
             newCarpet.Spawn();
             var carpet = newCarpet.gameObject.AddComponent<CarpetEntity>();
             carpet.needfuel = needfuel;
@@ -943,7 +941,6 @@ namespace Oxide.Plugins
             return null;
         }
 
-        // Check for our coffin, block adding another lock
         private object CanDeployItem(BasePlayer player, Deployer deployer, uint entityId)
         {
             if (entityId == 0 || player == null) return null;
@@ -967,6 +964,7 @@ namespace Oxide.Plugins
 
             return null;
         }
+
         private object CanPickupLock(BasePlayer player, BaseLock baseLock)
         {
             if (baseLock == null || player == null) return null;
@@ -1479,15 +1477,13 @@ namespace Oxide.Plugins
                     Interface.Oxide.LogInfo($"SpawnPart: {prefab}, active:{setactive.ToString()}, angles:({eulangx.ToString()}, {eulangy.ToString()}, {eulangz.ToString()}), position:({locposx.ToString()}, {locposy.ToString()}, {locposz.ToString()}), parent:{parent.ShortPrefabName} skinid:{skinid.ToString()}");
                 }
                 entitypart = GameManager.server.CreateEntity(prefab, entitypos, entityrot, setactive);
-                //Instance.Puts($"Setting skinid of {prefab} to {skinid.ToString()}");
+                entitypart.transform.localEulerAngles = new Vector3(eulangx, eulangy, eulangz);
+                entitypart.transform.localPosition = new Vector3(locposx, locposy, locposz);
+
+                entitypart.SetParent(parent, 0);
                 entitypart.skinID = Convert.ToUInt64(skinid);
                 entitypart?.Spawn();
                 SpawnRefresh(entitypart);
-
-                entitypart.transform.localEulerAngles = new Vector3(eulangx, eulangy, eulangz);
-                entitypart.transform.localPosition = new Vector3(locposx, locposy, locposz);
-                entitypart.SetParent(parent, 0);
-
                 return entitypart;
             }
 
