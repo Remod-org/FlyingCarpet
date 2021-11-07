@@ -1,4 +1,4 @@
-#region License (MIT)
+#region License (MIT)/RFC1920
 /*
 Copyright 2021 RFC1920 <desolationoutpostpve@gmail.com>
 
@@ -30,7 +30,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.2.4")]
+    [Info("FlyingCarpet", "RFC1920", "1.2.5")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     internal class FlyingCarpet : RustPlugin
@@ -49,7 +49,9 @@ namespace Oxide.Plugins
 
         private const string FCGUI = "fcgui.top";
         private const string FCGUM = "fcgui.menu";
-        public static FlyingCarpet Instance = null;
+        public static FlyingCarpet Instance;
+
+        [PluginReference]
         private readonly Plugin SignArtist, GridAPI;
 
         public class PlayerCarpetData
@@ -1405,7 +1407,7 @@ namespace Oxide.Plugins
             #endregion
         }
 
-        private class CarpetEntity : BaseEntity
+        private class CarpetEntity : MonoBehaviour
         {
             public BaseEntity entity;
             public BasePlayer player;
@@ -1560,20 +1562,20 @@ namespace Oxide.Plugins
             public void SpawnCarpet()
             {
                 carpet1 = SpawnPart(prefabcarpet, carpet1, false, 0, 0, 0, 0f, 0.3f, 0f, entity, skinid);
-                carpet1.SetFlag(Flags.Busy, true, true);
-                carpet1.SetFlag(Flags.Locked, true);
+                carpet1.SetFlag(BaseEntity.Flags.Busy, true, true);
+                carpet1.SetFlag(BaseEntity.Flags.Locked, true);
 
                 sitbox = SpawnPart(prefabbox, carpet1, false, 0, 90, 0, 0f, 0f, 0f, entity, Instance.configData.BoxSkinID);
 
                 lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, 0.33f, 1f, entity, 1);
-                lantern1.SetFlag(Flags.On, false);
+                lantern1.SetFlag(BaseEntity.Flags.On, false);
                 carpetlock = SpawnPart(prefablock, carpetlock, true, 0, 90, 90, 0.5f, 0.3f, 0.7f, entity, 1);
                 sign = SpawnPart(prefabsign, sign, true, -45, 0, 0, 0, 0.25f, 1.75f, entity, 1);
 
                 lights1 = SpawnPart(prefablights, lights1, true, 0, 90, 0, 0.8f, 0.31f, 0.1f, entity, 1);
-                lights1.SetFlag(Flags.Busy, true);
+                lights1.SetFlag(BaseEntity.Flags.Busy, true);
                 lights2 = SpawnPart(prefablights, lights2, true, 0, 90, 0, -0.9f, 0.31f, 0.1f, entity, 1);
-                lights2.SetFlag(Flags.Busy, true);
+                lights2.SetFlag(BaseEntity.Flags.Busy, true);
 
                 if (needfuel)
                 {
@@ -1583,7 +1585,7 @@ namespace Oxide.Plugins
                 else
                 {
                     // Cannot be looted
-                    lantern1.SetFlag(Flags.Locked, true);
+                    lantern1.SetFlag(BaseEntity.Flags.Locked, true);
                     // Add some fuel (1 lgf) so it lights up anyway.  It should always stay at 1.
                     SetFuel(1);
                 }
