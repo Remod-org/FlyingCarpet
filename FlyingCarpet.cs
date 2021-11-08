@@ -30,7 +30,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.2.5")]
+    [Info("FlyingCarpet", "RFC1920", "1.2.6")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     internal class FlyingCarpet : RustPlugin
@@ -1449,6 +1449,7 @@ namespace Oxide.Plugins
             private FlyingCarpet instance;
             public bool throttleup;
             public bool showmenu;
+            private bool zmTrigger;
             private float sprintspeed;
             private float normalspeed;
             private SphereCollider sphereCollider;
@@ -1524,12 +1525,12 @@ namespace Oxide.Plugins
 
             private void SpawnRefresh(BaseEntity entity)
             {
-                StabilityEntity hasstab = entity.GetComponent<StabilityEntity>() ?? null;
+                StabilityEntity hasstab = entity.GetComponent<StabilityEntity>();
                 if (hasstab != null)
                 {
                     hasstab.grounded = true;
                 }
-                BaseMountable hasmount = entity.GetComponent<BaseMountable>() ?? null;
+                BaseMountable hasmount = entity.GetComponent<BaseMountable>();
                 if (hasmount != null)
                 {
                     hasmount.needsVehicleTick = true;
@@ -1593,7 +1594,12 @@ namespace Oxide.Plugins
 
             private void OnTriggerEnter(Collider col)
             {
-                if (col.GetComponentInParent<BasePlayer>() != null)
+                if (col.gameObject.name == "ZoneManager")
+                {
+                    Instance.DoLog($"Trigger Enter: {col.gameObject.name}");
+                    zmTrigger = true;
+                }
+                else if (col.GetComponentInParent<BasePlayer>() != null)
                 {
                     carpetantihack.Add(col.GetComponentInParent<BasePlayer>());
                 }
@@ -1601,7 +1607,12 @@ namespace Oxide.Plugins
 
             private void OnTriggerExit(Collider col)
             {
-                if (col.GetComponentInParent<BasePlayer>() != null)
+                if (col.gameObject.name == "ZoneManager")
+                {
+                    Instance.DoLog($"Trigger Exit: {col.gameObject.name}");
+                    zmTrigger = false;
+                }
+                else if (col.GetComponentInParent<BasePlayer>() != null)
                 {
                     carpetantihack.Remove(col.GetComponentInParent<BasePlayer>());
                 }
@@ -1609,7 +1620,7 @@ namespace Oxide.Plugins
 
             private BasePlayer GetPilot()
             {
-                player = entity.GetComponent<BaseMountable>().GetMounted() as BasePlayer;
+                player = entity.GetComponent<BaseMountable>().GetMounted();
                 return player;
             }
 
@@ -1690,18 +1701,15 @@ namespace Oxide.Plugins
                     RaycastHit hit;
 
                     // This is a little weird.  Fortunately, some of the hooks determine fuel status...
-                    if (!hasFuel)
+                    if (!hasFuel && needfuel)
                     {
-                        if (needfuel)
-                        {
-                            islanding = false;
-                            engineon = false;
-                            return;
-                        }
+                        islanding = false;
+                        engineon = false;
+                        return;
                     }
                     if (islanding)
                     {
-                        if (!Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 3.5f, layerMask))
+                        if (!Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 3.5f, layerMask, QueryTriggerInteraction.Ignore))
                         {
                             // Drop fast
                             entity.transform.localPosition += (transform.up * -15f * Time.deltaTime);
@@ -1712,7 +1720,7 @@ namespace Oxide.Plugins
                             entity.transform.localPosition += transform.up * -5f * Time.deltaTime;
                         }
 
-                        if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask))
+                        if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask, QueryTriggerInteraction.Ignore))
                         {
                             islanding = false;
                             engineon = false;
@@ -1729,7 +1737,7 @@ namespace Oxide.Plugins
                     if (!autopilot)
                     {
                         // Maintain minimum height
-                        if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.down), out hit, minaltitude, layerMask))
+                        if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.down), out hit, minaltitude, layerMask) && !zmTrigger)
                         {
                             entity.transform.localPosition += transform.up * minaltitude * Time.deltaTime * 2;
                             ServerMgr.Instance.StartCoroutine(RefreshTrain());
@@ -1738,17 +1746,23 @@ namespace Oxide.Plugins
                         // Disallow flying forward into buildings, etc.
                         if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.forward), out hit, 10f, buildingMask))
                         {
-                            entity.transform.localPosition += transform.forward * -5f * Time.deltaTime;
-                            moveforward = false;
+                            if (!zmTrigger)
+                            {
+                                entity.transform.localPosition += transform.forward * -5f * Time.deltaTime;
+                                moveforward = false;
 
-                            string d = Math.Round(hit.distance, 2).ToString();
-                            Instance.DoLog($"FRONTAL CRASH (distance {d}m)!", true);
+                                string d = Math.Round(hit.distance, 2).ToString();
+                                Instance.DoLog($"FRONTAL CRASH (distance {d}m)!", true);
+                            }
                         }
                         // Disallow flying backward into buildings, etc.
                         else if (Physics.Raycast(new Ray(entity.transform.position, Vector3.forward * -1f), out hit, 10f, buildingMask))
                         {
-                            entity.transform.localPosition += transform.forward * 5f * Time.deltaTime;
-                            movebackward = false;
+                            if (!zmTrigger)
+                            {
+                                entity.transform.localPosition += transform.forward * 5f * Time.deltaTime;
+                                movebackward = false;
+                            }
                         }
                     }
 
@@ -1803,7 +1817,7 @@ namespace Oxide.Plugins
         {
             public static CuiElementContainer Container(string panel, string color, string min, string max, bool useCursor = false, string parent = "Overlay")
             {
-                CuiElementContainer container = new CuiElementContainer()
+                return new CuiElementContainer()
                 {
                     {
                         new CuiPanel
@@ -1816,7 +1830,6 @@ namespace Oxide.Plugins
                         panel
                     }
                 };
-                return container;
             }
 
             public static void Panel(ref CuiElementContainer container, string panel, string color, string min, string max, bool cursor = false)
