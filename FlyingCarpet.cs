@@ -30,7 +30,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.2.6")]
+    [Info("FlyingCarpet", "RFC1920", "1.2.7")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     internal class FlyingCarpet : RustPlugin
@@ -138,8 +138,6 @@ namespace Oxide.Plugins
             }
             return permission.UserHasPermission(pl.UserIDString, permname);
         }
-
-//        private bool HasPermission(ConsoleSystem.Arg arg, string permname) => (arg.Connection.player as BasePlayer) == null ? true : permission.UserHasPermission((arg.Connection.player as BasePlayer).UserIDString, permname);
 
         private static HashSet<BasePlayer> FindPlayers(string nameOrIdOrIp)
         {
@@ -594,7 +592,12 @@ namespace Oxide.Plugins
             }
             bool ison = activecarpet.engineon;
             if (ison) { activecarpet.islanding = true; Message(player.IPlayer, "landingcarpet"); return null; }
-            if (!ison) { AddPlayerToPilotsList(player); activecarpet.engineon = true; return null; }
+            if (!ison)
+            {
+                AddPlayerToPilotsList(player);
+                activecarpet.StartEngine();
+                return null;
+            }
 
             return rtrn;
         }
@@ -1684,6 +1687,21 @@ namespace Oxide.Plugins
                     hasFuel = true;
                     return true;
                 }
+            }
+
+            public void StartEngine()
+            {
+                engineon = true;
+                zmTrigger = false;
+                sphereCollider.enabled = false;
+                if (Instance.configData.debug) Instance.Puts("sphereCollider disabled for engine start");
+                instance.timer.Once(2, EngineStarted);
+            }
+
+            private void EngineStarted()
+            {
+                sphereCollider.enabled = true;
+                if (Instance.configData.debug) Instance.Puts("sphereCollider enabled after engine start");
             }
 
             private void Update()
