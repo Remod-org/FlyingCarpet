@@ -30,7 +30,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.2.7")]
+    [Info("FlyingCarpet", "RFC1920", "1.2.8")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     internal class FlyingCarpet : RustPlugin
@@ -257,13 +257,10 @@ namespace Oxide.Plugins
             bool vip = false;
             BasePlayer player = iplayer.Object as BasePlayer;
             if (!iplayer.HasPermission("flyingcarpet.use")) { Message(iplayer, "notauthorized"); return; }
-            if (args.Length == 1)
+            if (args.Length == 1 && args[0] == "guiclose")
             {
-                if (args[0] == "guiclose")
-                {
-                    CuiHelper.DestroyUi(player, FCGUM);
-                    return;
-                }
+                CuiHelper.DestroyUi(player, FCGUM);
+                return;
             }
             if (iplayer.HasPermission("flyingcarpet.vip"))
             {
@@ -288,7 +285,7 @@ namespace Oxide.Plugins
                 return;
             }
             bool vip = false;
-            string pname = args[0] ?? null;
+            string pname = args[0];
 
             if (!iplayer.HasPermission("flyingcarpet.admin")) { Message(iplayer, "notauthorized"); return; }
             if (pname == null) { Message(iplayer, "noplayer", "NAME_OR_ID"); return; }
@@ -425,7 +422,7 @@ namespace Oxide.Plugins
             string debug = string.Join(",", args); Puts($"{debug}");
 
             BasePlayer player = iplayer.Object as BasePlayer;
-            CarpetEntity iscarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
+            CarpetEntity iscarpet = player.GetMounted().GetComponentInParent<CarpetEntity>();
             if (args.Length > 0 && args[0] == "navclose")
             {
                 CuiHelper.DestroyUi(player, FCGUM);
@@ -549,7 +546,7 @@ namespace Oxide.Plugins
 
             try
             {
-                activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
+                activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>();
                 if (activecarpet == null) return null;
             }
             catch
@@ -611,7 +608,7 @@ namespace Oxide.Plugins
 
             BaseEntity lantern = oven as BaseEntity;
             // Only work on lanterns attached to a Carpet
-            CarpetEntity activecarpet = lantern.GetComponentInParent<CarpetEntity>() ?? null;
+            CarpetEntity activecarpet = lantern.GetComponentInParent<CarpetEntity>();
             if (activecarpet == null) return;
             DoLog("OnConsumeFuel: found a carpet lantern!");
 
@@ -668,7 +665,7 @@ namespace Oxide.Plugins
             DoLog("OnNightLanternToggle: Called on a lantern.  Checking for carpet...");
 
             // Only work on lanterns attached to a Carpet
-            CarpetEntity activecarpet = entity.GetComponentInParent<CarpetEntity>() ?? null;
+            CarpetEntity activecarpet = entity.GetComponentInParent<CarpetEntity>();
             if (activecarpet != null)
             {
                 DoLog("OnNightLanternToggle: Do not cycle this lantern!");
@@ -781,7 +778,6 @@ namespace Oxide.Plugins
             if (PilotListContainsPlayer(player))
             {
                 pilotslist.Remove(player.userID);
-                return;
             }
         }
 
@@ -794,7 +790,7 @@ namespace Oxide.Plugins
 
             foreach (BaseEntity p in carpetlist)
             {
-                CarpetEntity foundent = p.GetComponentInParent<CarpetEntity>() ?? null;
+                CarpetEntity foundent = p.GetComponentInParent<CarpetEntity>();
                 if (foundent != null)
                 {
                     foundcarpet = true;
@@ -817,7 +813,7 @@ namespace Oxide.Plugins
 
             foreach (BaseEntity p in carpetlist)
             {
-                CarpetEntity foundent = p.GetComponentInParent<CarpetEntity>() ?? null;
+                CarpetEntity foundent = p.GetComponentInParent<CarpetEntity>();
                 if (foundent != null)
                 {
                     foundcarpet = true;
@@ -840,7 +836,7 @@ namespace Oxide.Plugins
 
             foreach (BaseEntity p in carpetlist)
             {
-                CarpetEntity foundent = p.GetComponentInParent<CarpetEntity>() ?? null;
+                CarpetEntity foundent = p.GetComponentInParent<CarpetEntity>();
                 if (foundent != null)
                 {
                     foundcarpet = true;
@@ -863,7 +859,7 @@ namespace Oxide.Plugins
             //if (input.current.buttons > 1 && configData.debugMovement)
             //    Puts($"OnPlayerInput: {input.current.buttons}");
 
-            CarpetEntity activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>() ?? null;
+            CarpetEntity activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>();
             if (activecarpet == null) return;
             if (player.GetMounted() != activecarpet.entity) return;
             if (input != null)
@@ -876,14 +872,14 @@ namespace Oxide.Plugins
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
         {
             if (entity == null || hitInfo == null) return;
-            CarpetEntity iscarpet = entity.GetComponentInParent<CarpetEntity>() ?? null;
+            CarpetEntity iscarpet = entity.GetComponentInParent<CarpetEntity>();
             if (iscarpet != null) hitInfo.damageTypes.ScaleAll(0);
             return;
         }
 
         private object OnEntityGroundMissing(BaseEntity entity)
         {
-            CarpetEntity iscarpet = entity.GetComponentInParent<CarpetEntity>() ?? null;
+            CarpetEntity iscarpet = entity.GetComponentInParent<CarpetEntity>();
             if (iscarpet != null) return false;
             return null;
         }
@@ -915,7 +911,7 @@ namespace Oxide.Plugins
 
         private void OnEntityMounted(BaseMountable mountable, BasePlayer player)
         {
-            CarpetEntity activecarpet = mountable.GetComponentInParent<CarpetEntity>() ?? null;
+            CarpetEntity activecarpet = mountable.GetComponentInParent<CarpetEntity>();
             if (activecarpet != null)
             {
                 DoLog("OnEntityMounted: player mounted copter!");
@@ -927,7 +923,7 @@ namespace Oxide.Plugins
 
         private void OnEntityDismounted(BaseMountable mountable, BasePlayer player)
         {
-            CarpetEntity activecarpet = mountable.GetComponentInParent<CarpetEntity>() ?? null;
+            CarpetEntity activecarpet = mountable.GetComponentInParent<CarpetEntity>();
             if (activecarpet != null)
             {
                 DoLog("OnEntityMounted: player dismounted copter!");
@@ -939,10 +935,10 @@ namespace Oxide.Plugins
         private object CanLootEntity(BasePlayer player, StorageContainer container)
         {
             if (container == null || player == null) return null;
-            CarpetEntity iscarpet = container.GetComponentInParent<CarpetEntity>() ?? null;
-            if (iscarpet != null)
+            CarpetEntity iscarpet = container.GetComponentInParent<CarpetEntity>();
+            if (iscarpet?.carpetlock?.IsLocked() == true)
             {
-                if (iscarpet.carpetlock?.IsLocked() == true) return false;
+                return false;
             }
             return null;
         }
@@ -993,9 +989,7 @@ namespace Oxide.Plugins
 
             if (myparent == "FlyingCarpet")
             {
-#if DEBUG
-                Puts($"Player {player.displayName} trying to place an item(lock?) on carpet storage!");
-#endif
+                if (configData.debug) Puts($"Player {player.displayName} trying to place an item(lock?) on carpet storage!");
                 Message(player.IPlayer, "nolock");
                 return true;
             }
@@ -1040,7 +1034,6 @@ namespace Oxide.Plugins
         private void RemovePlayerID(ulong ownerid)
         {
             if (loadplayer.ContainsKey(ownerid)) loadplayer[ownerid].carpetcount--;
-            return;
         }
 
         private object OnPlayerDeath(BasePlayer player, HitInfo info)
@@ -1052,7 +1045,6 @@ namespace Oxide.Plugins
         private void RemoveCarpet(BasePlayer player)
         {
             RemovePlayerFromPilotsList(player);
-            return;
         }
 
         private void OnPlayerDisconnected(BasePlayer player, string reason)
@@ -1110,8 +1102,7 @@ namespace Oxide.Plugins
                 {
                     if (ishapis)
                     {
-                        MatchCollection elem = Regex.Matches(monument.name, @"\w{4,}|\d{1,}");
-                        foreach (Match e in elem)
+                        foreach (Match e in Regex.Matches(monument.name, @"\w{4,}|\d{1,}"))
                         {
                             if (e.Value.Equals("MONUMENT")) continue;
                             if (e.Value.Contains("Label")) continue;
@@ -1177,7 +1168,6 @@ namespace Oxide.Plugins
             public int totalPoints;
 
             public static bool grounded = true;
-            public static bool started = false;
             public bool paused;
 
             private void Awake()
@@ -1727,7 +1717,7 @@ namespace Oxide.Plugins
                     }
                     if (islanding)
                     {
-                        if (!Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 3.5f, layerMask, QueryTriggerInteraction.Ignore))
+                        if (!Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 3.5f, layerMask))//, QueryTriggerInteraction.Ignore))
                         {
                             // Drop fast
                             entity.transform.localPosition += (transform.up * -15f * Time.deltaTime);
@@ -1738,7 +1728,7 @@ namespace Oxide.Plugins
                             entity.transform.localPosition += transform.up * -5f * Time.deltaTime;
                         }
 
-                        if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask, QueryTriggerInteraction.Ignore))
+                        if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask))//, QueryTriggerInteraction.Ignore))
                         {
                             islanding = false;
                             engineon = false;
