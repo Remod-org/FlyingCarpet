@@ -1,20 +1,25 @@
-#region License (MIT)/RFC1920
+#region License (GPL v3)
 /*
-Copyright 2021 RFC1920 <desolationoutpostpve@gmail.com>
+    DESCRIPTION
+    Copyright (c) RFC1920 <desolationoutpostpve@gmail.com>
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy,
-modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following conditions:
+    This program is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License
+    as published by the Free Software Foundation; either version 2
+    of the License, or (at your option) any later version.
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+    Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
-#endregion License Information (MIT)
+#endregion License Information (GPL v3)
 using Oxide.Core;
 using Oxide.Game.Rust.Cui;
 using System;
@@ -30,7 +35,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.2.8")]
+    [Info("FlyingCarpet", "RFC1920", "1.2.9")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     internal class FlyingCarpet : RustPlugin
@@ -378,6 +383,7 @@ namespace Oxide.Plugins
                 if (target == "all")
                 {
                     DestroyAllCarpets(player);
+                    CuiHelper.DestroyUi(player, FCGUI);
                     CuiHelper.DestroyUi(player, FCGUM);
                     return;
                 }
@@ -395,12 +401,14 @@ namespace Oxide.Plugins
                 BasePlayer targetPlayer = players.First();
                 RemoveCarpet(targetPlayer);
                 DestroyRemoteCarpet(targetPlayer);
+                CuiHelper.DestroyUi(targetPlayer, FCGUI);
                 CuiHelper.DestroyUi(targetPlayer, FCGUM);
             }
             else
             {
                 RemoveCarpet(player);
                 DestroyLocalCarpet(player);
+                CuiHelper.DestroyUi(player, FCGUI);
                 CuiHelper.DestroyUi(player, FCGUM);
             }
         }
@@ -652,7 +660,6 @@ namespace Oxide.Plugins
                     activecarpet.engineon = false;
                     Message(player.IPlayer, "landingcarpet");
                     OnOvenToggle(oven, player);
-                    return;
                 }
             }
         }
@@ -712,7 +719,7 @@ namespace Oxide.Plugins
             BaseEntity newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
             newCarpet.name = "FlyingCarpet";
             BaseMountable chairmount = newCarpet.GetComponent<BaseMountable>();
-            chairmount.needsVehicleTick = true;
+            chairmount.isMobile = true;
             newCarpet.enableSaving = false;
             newCarpet.OwnerID = player.userID;
             newCarpet.Spawn();
@@ -866,7 +873,6 @@ namespace Oxide.Plugins
             {
                 activecarpet.CarpetInput(input, player);
             }
-            return;
         }
 
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
@@ -874,7 +880,6 @@ namespace Oxide.Plugins
             if (entity == null || hitInfo == null) return;
             CarpetEntity iscarpet = entity.GetComponentInParent<CarpetEntity>();
             if (iscarpet != null) hitInfo.damageTypes.ScaleAll(0);
-            return;
         }
 
         private object OnEntityGroundMissing(BaseEntity entity)
@@ -886,18 +891,15 @@ namespace Oxide.Plugins
 
         private bool CarpetLimitReached(BasePlayer player, bool vip=false)
         {
-            if (configData.UseMaxCarpetChecks)
+            if (configData.UseMaxCarpetChecks && loadplayer.ContainsKey(player.userID))
             {
-                if (loadplayer.ContainsKey(player.userID))
+                int currentcount = loadplayer[player.userID].carpetcount;
+                int maxallowed = configData.MaxCarpets;
+                if (vip)
                 {
-                    int currentcount = loadplayer[player.userID].carpetcount;
-                    int maxallowed = configData.MaxCarpets;
-                    if (vip)
-                    {
-                        maxallowed = configData.VIPMaxCarpets;
-                    }
-                    if (currentcount >= maxallowed) return true;
+                    maxallowed = configData.VIPMaxCarpets;
                 }
+                if (currentcount >= maxallowed) return true;
             }
             return false;
         }
@@ -1526,7 +1528,7 @@ namespace Oxide.Plugins
                 BaseMountable hasmount = entity.GetComponent<BaseMountable>();
                 if (hasmount != null)
                 {
-                    hasmount.needsVehicleTick = true;
+                    hasmount.isMobile = true;
                 }
             }
 
