@@ -35,9 +35,8 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.2.9")]
+    [Info("FlyingCarpet", "RFC1920", "1.3.0")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
-    // Thanks to Colon Blow for his fine work on GyroCopter, upon which this was originally based.
     internal class FlyingCarpet : RustPlugin
     {
         #region vars
@@ -78,6 +77,7 @@ namespace Oxide.Plugins
             layerMask = (1 << 29);
             layerMask |= (1 << 18);
             layerMask = ~layerMask;
+            //layerMask =  LayerMask.GetMask("Construction", "Tree", "Rock", "Deployed", "World", "Terrain");
             //buildingMask = LayerMask.GetMask("Construction", "Tree", "Rock", "Deployed", "World");
             buildingMask = LayerMask.GetMask("Construction", "Prevent Building", "Deployed", "World", "Terrain", "Tree", "Invisible", "Default");
 
@@ -1730,7 +1730,7 @@ namespace Oxide.Plugins
                             entity.transform.localPosition += transform.up * -5f * Time.deltaTime;
                         }
 
-                        if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask))//, QueryTriggerInteraction.Ignore))
+                        if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask) && hit.collider?.name != "ZoneManager")
                         {
                             islanding = false;
                             engineon = false;
@@ -1747,7 +1747,7 @@ namespace Oxide.Plugins
                     if (!autopilot)
                     {
                         // Maintain minimum height
-                        if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.down), out hit, minaltitude, layerMask) && !zmTrigger)
+                        if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.down), out hit, minaltitude, layerMask))
                         {
                             entity.transform.localPosition += transform.up * minaltitude * Time.deltaTime * 2;
                             ServerMgr.Instance.StartCoroutine(RefreshTrain());
