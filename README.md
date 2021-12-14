@@ -9,6 +9,8 @@ For the default mode, the user will receive notification via chat message as wel
 
 ![](https://i.imgur.com/ZsXcSLp.png)
 
+It is recommended that you use this in conjunction with https://github.com/WheteThunger/ParentedEntityRenderFix until such time that Facepunch fixes the culling issue impacting plugins built from multiple parented objects.  I would not hold my breath that they will since this was likely done for overall performance and suits vanilla just fine.  See more below.
+
 ## Permissions
 
 * flyingcarpet.use -- Allows player to spawn and fly a carpet using low grade fuel
@@ -80,6 +82,19 @@ Configuration is done via the FlyingCarpet.json file under the oxide/config dire
 Note that that owner/admin can customize the skins for both the chair and the rug, set global fuel requirements and flying speed, and limit the number of carpets for each player (highly recommended).
 
 You *could* set "RequireFuel" to false, but it is recommended that you leave this setting true and use the flyingcarpet.unlimited permission instead if you want to remove the fuel requirement.
+
+For the ParentedRenderFix plugin, you should use the following at a minimum:
+
+```json
+{
+  "EnabledEntities": [
+    "chair.deployed",
+    "woodbox_deployed",
+    "lantern.deployed",
+    "rug.deployed"
+  ]
+}
+```
 
 ## Flight School
 1. Type /fc to spawn a carpet.
