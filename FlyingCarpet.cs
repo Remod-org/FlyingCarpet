@@ -35,7 +35,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.3.0")]
+    [Info("FlyingCarpet", "RFC1920", "1.3.1")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -203,6 +203,7 @@ namespace Oxide.Plugins
                 SprintSpeed = 25,
                 BoxSkinID = 1330214613,
                 RugSkinID = 870448575,
+                ChairSkinID = 875258235,
                 Version = Version
             };
             SaveConfig(config);
@@ -245,6 +246,7 @@ namespace Oxide.Plugins
 
             public ulong BoxSkinID;
             public ulong RugSkinID;
+            public ulong ChairSkinID;
 
             public VersionNumber Version;
         }
@@ -715,13 +717,15 @@ namespace Oxide.Plugins
                 spawnpos = new Vector3(location.x, location.y + 0.5f, location.z);
             }
 
-            const string staticprefab = "assets/bundled/prefabs/static/chair.invisible.static.prefab";
+            //const string staticprefab = "assets/bundled/prefabs/static/chair.invisible.static.prefab";
+            const string staticprefab = "assets/bundled/prefabs/static/chair.static.prefab";
             BaseEntity newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
             newCarpet.name = "FlyingCarpet";
-            BaseMountable chairmount = newCarpet.GetComponent<BaseMountable>();
+            BaseMountable chairmount = newCarpet as BaseMountable;
             chairmount.isMobile = true;
             newCarpet.enableSaving = false;
             newCarpet.OwnerID = player.userID;
+            newCarpet.skinID = Convert.ToUInt64(configData.ChairSkinID);
             newCarpet.Spawn();
             CarpetEntity carpet = newCarpet.gameObject.AddComponent<CarpetEntity>();
             carpet.needfuel = needfuel;
@@ -863,9 +867,6 @@ namespace Oxide.Plugins
             if (player == null || input == null) return;
             if (!player.isMounted) return;
 
-            //if (input.current.buttons > 1 && configData.debugMovement)
-            //    Puts($"OnPlayerInput: {input.current.buttons}");
-
             CarpetEntity activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>();
             if (activecarpet == null) return;
             if (player.GetMounted() != activecarpet.entity) return;
@@ -950,12 +951,7 @@ namespace Oxide.Plugins
             if (entity == null || player == null) return null;
 
             BaseEntity myent = entity as BaseEntity;
-            string myparent = null;
-            try
-            {
-                myparent = myent.GetParentEntity().name;
-            }
-            catch {}
+            string myparent = myent?.GetParentEntity().name;
 
             if (myparent == "FlyingCarpet" || myent.name == "FlyingCarpet")
             {
@@ -1129,7 +1125,7 @@ namespace Oxide.Plugins
                 monPos.Add(name, monument.transform.position);
                 monSize.Add(name, extents);
 
-//                Puts($"Monument {name} @ {monument.transform.position.ToString()} size: {extents.z.ToString()}");
+                //Puts($"Monument {name} @ {monument.transform.position.ToString()} size: {extents.z.ToString()}");
             }
             monPos.OrderBy(x => x.Key);
             monSize.OrderBy(x => x.Key);
@@ -1349,13 +1345,10 @@ namespace Oxide.Plugins
             {
                 // In case we get stuck under a building component, esp at OilRigs
                 RaycastHit hitinfo;
-                if (Physics.Raycast(current + carpet.transform.up, Vector3.up, out hitinfo, 2f, buildingMask))
+                if (Physics.Raycast(current + carpet.transform.up, Vector3.up, out hitinfo, 2f, buildingMask) && hitinfo.GetEntity() != carpet)
                 {
-                    if (hitinfo.GetEntity() != carpet)
-                    {
-                        Instance.DoLog($"CRASH ABOVE!", true);
-                        return true;
-                    }
+                    Instance.DoLog("CRASH ABOVE!", true);
+                    return true;
                 }
                 return false;
             }
@@ -1417,10 +1410,9 @@ namespace Oxide.Plugins
 
             public CarpetNav nav;
             public string entname = "FlyingCarpet";
-            private readonly float fMagnitude = 0.75f;
 
-            public Quaternion entityrot;
             private Vector3 entitypos;
+            public Quaternion entityrot;
 
             public bool autopilot;
             public bool moveforward;
