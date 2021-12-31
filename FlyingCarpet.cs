@@ -35,7 +35,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.3.1")]
+    [Info("FlyingCarpet", "RFC1920", "1.3.2")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -441,6 +441,7 @@ namespace Oxide.Plugins
             else if (args.Length > 0 && args[0] == "navcancel")
             {
                 CuiHelper.DestroyUi(player, FCGUM);
+                ShowTopGUI(player);
                 iscarpet.nav.enabled = false;
                 iscarpet.nav.paused = false;
                 iscarpet.autopilot = false;
@@ -488,7 +489,7 @@ namespace Oxide.Plugins
             if (player == null) return;
             CuiHelper.DestroyUi(player, FCGUM);
 
-            CuiElementContainer container = UI.Container(FCGUM, UI.Color("222222", 0.9f), "0.3 0.3", "0.7 0.7", true, "Overlay");
+            CuiElementContainer container = UI.Container(FCGUM, UI.Color("222222", 0.9f), "0.2 0.2", "0.8 0.8", true, "Overlay");
             UI.Label(ref container, FCGUM, UI.Color("#ffffff", 1f), "Flying Carpet Menu", 16, "0 0.92", "0.9 0.99");
             UI.Button(ref container, FCGUM, UI.Color("#d85540", 1f), Lang("close"), 12, "0.92 0.93", "0.99 0.99", "fcnav navclose", UI.Color("#ffffff", 1));
 
@@ -504,11 +505,13 @@ namespace Oxide.Plugins
                 }
                 posb = GetButtonPositionP(row, col);
 
-                UI.Button(ref container, FCGUM, UI.Color("#d85540", 1f), mons.Key, 8, $"{posb[0]} {posb[1]}", $"{posb[0] + ((posb[2] - posb[0]) / 2)} {posb[3]}", $"fcnav {player.userID} {mons.Key}", UI.Color("#ffffff", 1));
+                string moninfo = mons.Key + " (" + PositionToGrid(mons.Value) + ")";
+
+                UI.Button(ref container, FCGUM, UI.Color("#d85540", 1f), moninfo, 10, $"{posb[0]} {posb[1]}", $"{posb[0] + ((posb[2] - posb[0]) / 2)} {posb[3]}", $"fcnav {player.userID} {mons.Key}", UI.Color("#ffffff", 1));
                 row++;
             }
             row++;
-            UI.Button(ref container, FCGUM, UI.Color("#ff0000", 1f), Lang("cancel"), 8, $"{posb[0]} {posb[1]}", $"{posb[0] + ((posb[2] - posb[0]) / 2)} {posb[3]}", "fcnav navcancel", UI.Color("#ffffff", 1));
+            UI.Button(ref container, FCGUM, UI.Color("#ff0000", 1f), Lang("cancel"), 10, $"{posb[0]} {posb[1]}", $"{posb[0] + ((posb[2] - posb[0]) / 2)} {posb[3]}", "fcnav navcancel", UI.Color("#ffffff", 1));
 
             CuiHelper.AddUi(player, container);
         }
@@ -525,8 +528,8 @@ namespace Oxide.Plugins
 
         private float[] GetButtonPositionP(int rowNumber, int columnNumber)
         {
-            float offsetX = 0.05f + (0.186f * columnNumber);
-            float offsetY = (0.85f - (rowNumber * 0.074f));
+            float offsetX = 0.05f + (0.146f * columnNumber);
+            float offsetY = (0.8f - (rowNumber * 0.074f));
 
             return new float[] { offsetX, offsetY, offsetX + 0.256f, offsetY + 0.03f };
         }
@@ -719,13 +722,23 @@ namespace Oxide.Plugins
 
             //const string staticprefab = "assets/bundled/prefabs/static/chair.invisible.static.prefab";
             const string staticprefab = "assets/bundled/prefabs/static/chair.static.prefab";
-            BaseEntity newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, new Quaternion(), true);
+            BaseEntity newCarpet = GameManager.server.CreateEntity(staticprefab, spawnpos, player.transform.rotation, true);
             newCarpet.name = "FlyingCarpet";
             BaseMountable chairmount = newCarpet as BaseMountable;
             chairmount.isMobile = true;
             newCarpet.enableSaving = false;
             newCarpet.OwnerID = player.userID;
             newCarpet.skinID = Convert.ToUInt64(configData.ChairSkinID);
+            //foreach (BoxCollider box in newCarpet.gameObject.GetComponentsInChildren<BoxCollider>())
+            //{
+            //    UnityEngine.Object.DestroyImmediate(box);
+            //}
+
+            foreach (MeshCollider mesh in newCarpet.GetComponentsInChildren<MeshCollider>())
+            {
+                UnityEngine.Object.DestroyImmediate(mesh);
+            }
+
             newCarpet.Spawn();
             CarpetEntity carpet = newCarpet.gameObject.AddComponent<CarpetEntity>();
             carpet.needfuel = needfuel;
@@ -920,6 +933,7 @@ namespace Oxide.Plugins
                 DoLog("OnEntityMounted: player mounted copter!");
                 if (mountable.GetComponent<BaseEntity>() != activecarpet.entity) return;
                 activecarpet.lantern1.SetFlag(BaseEntity.Flags.On, false);
+                activecarpet.sign.SetFlag(BaseEntity.Flags.Busy, true);
                 ShowTopGUI(player);
             }
         }
@@ -932,6 +946,7 @@ namespace Oxide.Plugins
                 DoLog("OnEntityMounted: player dismounted copter!");
                 CuiHelper.DestroyUi(player, FCGUI);
                 if (mountable.GetComponent<BaseEntity>() != activecarpet.entity) return;
+                activecarpet.sign.SetFlag(BaseEntity.Flags.Busy, false);
             }
         }
 
@@ -949,21 +964,19 @@ namespace Oxide.Plugins
         private object CanPickupEntity(BasePlayer player, BaseCombatEntity entity)
         {
             if (entity == null || player == null) return null;
+            string myparent = entity?.GetParentEntity()?.name;
 
-            BaseEntity myent = entity as BaseEntity;
-            string myparent = myent?.GetParentEntity().name;
-
-            if (myparent == "FlyingCarpet" || myent.name == "FlyingCarpet")
+            if (myparent == "FlyingCarpet" || entity?.name == "FlyingCarpet")
             {
                 if (configData.debug)
                 {
-                    if (myent.name == "FlyingCarpet")
+                    if (entity?.name == "FlyingCarpet")
                     {
                         Puts("CanPickupEntity: player trying to pickup the carpet!");
                     }
                     else if (myparent == "FlyingCarpet")
                     {
-                        string entity_name = myent.LookupPrefab().name;
+                        string entity_name = entity?.LookupPrefab().name;
                         Puts($"CanPickupEntity: player trying to remove {entity_name} from a carpet!");
                     }
                 }
@@ -1077,58 +1090,81 @@ namespace Oxide.Plugins
             }
         }
 
+        public string PositionToGrid(Vector3 position)
+        {
+            if (GridAPI != null)
+            {
+                string[] g = (string[]) GridAPI.CallHook("GetGrid", position);
+                return string.Concat(g);
+            }
+            else
+            {
+                // From GrTeleport for display only
+                Vector2 r = new Vector2((World.Size / 2) + position.x, (World.Size / 2) + position.z);
+                float x = Mathf.Floor(r.x / 146.3f) % 26;
+                float z = Mathf.Floor(World.Size / 146.3f) - Mathf.Floor(r.y / 146.3f);
+
+                return $"{(char)('A' + x)}{z - 1}";
+            }
+        }
+
         private void FindMonuments()
         {
             Vector3 extents = Vector3.zero;
-            string name = null;
-            bool ishapis =  ConVar.Server.level.Contains("Hapis");
+            float realWidth = 0f;
+            string name = "";
+            string newname = "";
 
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
-                if (monument.name.Contains("power_sub")) continue;// || monument.name.Contains("cave")) continue;
+                if (monument.name.Contains("power_sub") || monument.name.Contains("derwater")) continue;
+
+                realWidth = 0f;
                 name = null;
 
                 if (monument.name == "OilrigAI")
                 {
                     name = "Small Oilrig";
+                    realWidth = 100f;
                 }
                 else if (monument.name == "OilrigAI2")
                 {
                     name = "Large Oilrig";
+                    realWidth = 200f;
                 }
                 else
                 {
-                    if (ishapis)
-                    {
-                        foreach (Match e in Regex.Matches(monument.name, @"\w{4,}|\d{1,}"))
-                        {
-                            if (e.Value.Equals("MONUMENT")) continue;
-                            if (e.Value.Contains("Label")) continue;
-                            name += e.Value + " ";
-                        }
-                        name = name.Trim();
-                    }
-                    else
-                    {
-                        name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
-                    }
+                    name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize() + " 0";
                 }
-                if (monPos.ContainsKey(name)) continue;
+                if (monPos.ContainsKey(name))
+                {
+                    if (monPos[name] == monument.transform.position) continue;
+
+                    newname = name.Remove(name.Length -1, 1) + "1";
+                    if (monPos.ContainsKey(newname))
+                    {
+                        newname = name.Remove(name.Length - 1, 1) + "2";
+                    }
+                    if (monPos.ContainsKey(newname))
+                    {
+                        continue;
+                    }
+                    name = newname;
+                }
 
                 extents = monument.Bounds.extents;
-
+                if (realWidth > 0f)
+                {
+                    extents.z = realWidth;
+                }
                 if (extents.z < 1)
                 {
-                    extents.z = 100f;
+                    extents.z = 50f;
                 }
-                monNames.Add(name);
-                monPos.Add(name, monument.transform.position);
-                monSize.Add(name, extents);
-
-                //Puts($"Monument {name} @ {monument.transform.position.ToString()} size: {extents.z.ToString()}");
+                monPos.Add(name.Trim(), monument.transform.position);
+                monSize.Add(name.Trim(), extents);
+                //DoLog($"Found monument {name} at {monument.transform.position.ToString()}");
             }
-            monPos.OrderBy(x => x.Key);
-            monSize.OrderBy(x => x.Key);
         }
         #endregion
 
@@ -1170,7 +1206,7 @@ namespace Oxide.Plugins
 
             private void Awake()
             {
-                Instance.DoLog($"Awake()");
+                Instance.DoLog("Awake()");
                 carpet = GetComponent<CarpetEntity>();
                 player = carpet.player;
                 enabled = false;
@@ -1250,12 +1286,12 @@ namespace Oxide.Plugins
                 {
                     if (!DangerRight(current) && frontcrash && !above)
                     {
-                        Instance.DoLog($"Moving BACK and RIGHT to avoid frontal crash", true);
+                        Instance.DoLog("Moving BACK and RIGHT to avoid frontal crash", true);
                         message.buttons = 48;
                     }
                     else if (!DangerLeft(current) && frontcrash && !above)
                     {
-                        Instance.DoLog($"Moving BACK and LEFT to avoid frontal crash", true);
+                        Instance.DoLog("Moving BACK and LEFT to avoid frontal crash", true);
                         message.buttons = 40;
                     }
                 }
@@ -1386,7 +1422,7 @@ namespace Oxide.Plugins
                 {
                     if (hitinfo.GetEntity() != carpet)
                     {
-                        Instance.DoLog($"TOO LOW!", true);
+                        Instance.DoLog("TOO LOW!", true);
                         return true;
                     }
                 }
@@ -1436,7 +1472,6 @@ namespace Oxide.Plugins
             private FlyingCarpet instance;
             public bool throttleup;
             public bool showmenu;
-            private bool zmTrigger;
             private float sprintspeed;
             private float normalspeed;
             private SphereCollider sphereCollider;
@@ -1482,12 +1517,14 @@ namespace Oxide.Plugins
                 normalspeed = Instance.configData.NormalSpeed;
                 skinid = Instance.configData.RugSkinID;
                 SpawnCarpet();
+
                 lantern1.OwnerID = entity.OwnerID;
                 sign.OwnerID = entity.OwnerID;
 
-                sphereCollider = entity.gameObject.AddComponent<SphereCollider>();
+                sphereCollider = gameObject.AddComponent<SphereCollider>();
                 sphereCollider.gameObject.layer = (int)Layer.Reserved1;
                 sphereCollider.isTrigger = true;
+                sphereCollider.tag = "FlyingCarpet";
                 sphereCollider.radius = 6f;
 
                 nav = entity.gameObject.AddComponent<CarpetNav>();
@@ -1505,9 +1542,31 @@ namespace Oxide.Plugins
 
                 entitypart.SetParent(parent, 0);
                 entitypart.skinID = Convert.ToUInt64(skinid);
+                RemoveComps(entitypart);
                 entitypart?.Spawn();
                 SpawnRefresh(entitypart);
                 return entitypart;
+            }
+
+            public void RemoveComps(BaseEntity obj)
+            {
+                DestroyImmediate(obj.GetComponent<DestroyOnGroundMissing>());
+                DestroyImmediate(obj.GetComponent<GroundWatch>());
+                //foreach (BoxCollider box in obj.gameObject.GetComponentsInChildren<BoxCollider>())
+                //{
+                //    Instance.DoLog($"Destroying BoxCollider for {obj.ShortPrefabName}");
+                //    DestroyImmediate(box);
+                //}
+                //foreach (CapsuleCollider cap in obj.gameObject.GetComponentsInChildren<CapsuleCollider>())
+                //{
+                //    Instance.DoLog($"Destroying CapsuleCollider for {obj.ShortPrefabName}");
+                //    DestroyImmediate(cap);
+                //}
+                foreach (MeshCollider mesh in obj.GetComponentsInChildren<MeshCollider>())
+                {
+                    Instance.DoLog($"Destroying MeshCollider for {obj.ShortPrefabName}");
+                    DestroyImmediate(mesh);
+                }
             }
 
             private void SpawnRefresh(BaseEntity entity)
@@ -1550,11 +1609,7 @@ namespace Oxide.Plugins
             public void SpawnCarpet()
             {
                 carpet1 = SpawnPart(prefabcarpet, carpet1, false, 0, 0, 0, 0f, 0.3f, 0f, entity, skinid);
-                carpet1.SetFlag(BaseEntity.Flags.Busy, true, true);
-                carpet1.SetFlag(BaseEntity.Flags.Locked, true);
-
-                sitbox = SpawnPart(prefabbox, carpet1, false, 0, 90, 0, 0f, 0f, 0f, entity, Instance.configData.BoxSkinID);
-
+                sitbox = SpawnPart(prefabbox, carpet1, false, 0, 90, 0, 0f, -0.2f, 0f, entity, Instance.configData.BoxSkinID);
                 lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, 0.33f, 1f, entity, 1);
                 lantern1.SetFlag(BaseEntity.Flags.On, false);
                 carpetlock = SpawnPart(prefablock, carpetlock, true, 0, 90, 90, 0.5f, 0.3f, 0.7f, entity, 1);
@@ -1583,8 +1638,8 @@ namespace Oxide.Plugins
             {
                 if (col.gameObject.name == "ZoneManager")
                 {
-                    Instance.DoLog($"Trigger Enter: {col.gameObject.name}");
-                    zmTrigger = true;
+                    Instance.DoLog("Ignoring this collision for ZoneManager");
+                    Physics.IgnoreCollision(col, sphereCollider);
                 }
                 else if (col.GetComponentInParent<BasePlayer>() != null)
                 {
@@ -1597,7 +1652,6 @@ namespace Oxide.Plugins
                 if (col.gameObject.name == "ZoneManager")
                 {
                     Instance.DoLog($"Trigger Exit: {col.gameObject.name}");
-                    zmTrigger = false;
                 }
                 else if (col.GetComponentInParent<BasePlayer>() != null)
                 {
@@ -1676,16 +1730,15 @@ namespace Oxide.Plugins
             public void StartEngine()
             {
                 engineon = true;
-                zmTrigger = false;
                 sphereCollider.enabled = false;
-                if (Instance.configData.debug) Instance.Puts("sphereCollider disabled for engine start");
+                Instance.DoLog("sphereCollider disabled for engine start");
                 instance.timer.Once(2, EngineStarted);
             }
 
             private void EngineStarted()
             {
                 sphereCollider.enabled = true;
-                if (Instance.configData.debug) Instance.Puts("sphereCollider enabled after engine start");
+                Instance.DoLog("sphereCollider enabled after engine start");
             }
 
             private void Update()
@@ -1694,6 +1747,7 @@ namespace Oxide.Plugins
                 {
                     nav.paused = true;
                     Instance.ShowMenuGUI(GetPilot());
+                    return;
                 }
                 if (engineon)
                 {
@@ -1711,7 +1765,7 @@ namespace Oxide.Plugins
                     }
                     if (islanding)
                     {
-                        if (!Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 3.5f, layerMask))//, QueryTriggerInteraction.Ignore))
+                        if (!Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 3.5f, layerMask, QueryTriggerInteraction.Ignore))
                         {
                             // Drop fast
                             entity.transform.localPosition += (transform.up * -15f * Time.deltaTime);
@@ -1739,32 +1793,26 @@ namespace Oxide.Plugins
                     if (!autopilot)
                     {
                         // Maintain minimum height
-                        if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.down), out hit, minaltitude, layerMask))
+                        if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.down), out hit, minaltitude, layerMask, QueryTriggerInteraction.Ignore))
                         {
                             entity.transform.localPosition += transform.up * minaltitude * Time.deltaTime * 2;
                             ServerMgr.Instance.StartCoroutine(RefreshTrain());
                             return;
                         }
                         // Disallow flying forward into buildings, etc.
-                        if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.forward), out hit, 10f, buildingMask))
+                        if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.forward), out hit, 10f, buildingMask, QueryTriggerInteraction.Ignore))
                         {
-                            if (!zmTrigger)
-                            {
-                                entity.transform.localPosition += transform.forward * -5f * Time.deltaTime;
-                                moveforward = false;
+                            entity.transform.localPosition += transform.forward * -5f * Time.deltaTime;
+                            moveforward = false;
 
-                                string d = Math.Round(hit.distance, 2).ToString();
-                                Instance.DoLog($"FRONTAL CRASH (distance {d}m)!", true);
-                            }
+                            string d = Math.Round(hit.distance, 2).ToString();
+                            Instance.DoLog($"FRONTAL CRASH (distance {d}m)!", true);
                         }
                         // Disallow flying backward into buildings, etc.
                         else if (Physics.Raycast(new Ray(entity.transform.position, Vector3.forward * -1f), out hit, 10f, buildingMask))
                         {
-                            if (!zmTrigger)
-                            {
-                                entity.transform.localPosition += transform.forward * 5f * Time.deltaTime;
-                                movebackward = false;
-                            }
+                            entity.transform.localPosition += transform.forward * 5f * Time.deltaTime;
+                            movebackward = false;
                         }
                     }
 
