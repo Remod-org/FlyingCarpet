@@ -1,12 +1,12 @@
-#region License (GPL v3)
+#region License (GPL v2)
 /*
     DESCRIPTION
     Copyright (c) RFC1920 <desolationoutpostpve@gmail.com>
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
+    as published by the Free Software Foundation; version 2
+    of the License only.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -19,7 +19,7 @@
 
     Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
-#endregion License Information (GPL v3)
+#endregion License (GPL v2)
 using Oxide.Core;
 using Oxide.Game.Rust.Cui;
 using System;
@@ -35,7 +35,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.3.2")]
+    [Info("FlyingCarpet", "RFC1920", "1.3.4")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -56,7 +56,7 @@ namespace Oxide.Plugins
         public static FlyingCarpet Instance;
 
         [PluginReference]
-        private readonly Plugin SignArtist, GridAPI;
+        private readonly Plugin SignArtist, GridAPI, Friends, Clans;
 
         public class PlayerCarpetData
         {
@@ -234,6 +234,11 @@ namespace Oxide.Plugins
             public bool RequireFuel;
             public bool debug;
             public bool debugMovement;
+
+            public bool HonorRelationships;
+            public bool useFriends;
+            public bool useClans;
+            public bool useTeams;
 
             public int MaxCarpets;
             public int VIPMaxCarpets;
@@ -455,7 +460,7 @@ namespace Oxide.Plugins
                 monname += args[i] + " ";
 			}
 			monname = monname.Trim();
-            Puts($"Flying from {player.transform.position.ToString()} to {target.ToString()}");
+            Puts($"Flying from {player.transform.position} to {target}");
 
             if (iscarpet != null)
 			{
@@ -701,6 +706,9 @@ namespace Oxide.Plugins
             if (location == default(Vector3) && player != null) location = player.transform.position;
             Vector3 spawnpos = new Vector3();
 
+            Quaternion rotation = player.GetNetworkRotation();
+            Vector3 forward = rotation * Vector3.forward;
+            Vector3 straight = Vector3.Cross(Vector3.Cross(Vector3.up, forward), Vector3.up).normalized;
             // Set initial default for fuel requirement based on config
             bool needfuel = configData.RequireFuel;
             if (isAllowed(player, "flyingcarpet.unlimited"))
@@ -712,7 +720,8 @@ namespace Oxide.Plugins
             if (needfuel)
             {
                 // Don't put them on the carpet since they need to fuel up first
-                spawnpos = player.transform.position + (-player.transform.forward * 2f) + new Vector3(0, 1f, 0);
+                spawnpos = location + (straight * 2f);
+                spawnpos.y = location.y + 0.5f;
             }
             else
             {
@@ -918,10 +927,24 @@ namespace Oxide.Plugins
             return false;
         }
 
+        private object CanMountEntity(BasePlayer player, BaseMountable mountable)
+        {
+            CarpetEntity activecarpet = mountable.GetComponentInParent<CarpetEntity>();
+            if (activecarpet != null)
+            {
+                if (!IsFriend(player.userID, mountable.OwnerID)) return false;
+            }
+            return null;
+        }
+
         private object CanDismountEntity(BasePlayer player, BaseMountable entity)
         {
             if (player == null) return null;
-            if (PilotListContainsPlayer(player)) return false;
+            if (PilotListContainsPlayer(player))
+            {
+                CarpetEntity activecarpet = entity.GetComponentInParent<CarpetEntity>();
+                return !activecarpet.engineon ? null : (object)false;
+            }
             return null;
         }
 
@@ -1079,6 +1102,43 @@ namespace Oxide.Plugins
                 }
             }
         }
+        private bool IsFriend(ulong playerid, ulong ownerid)
+        {
+            if (!configData.HonorRelationships) return true;
+            if (playerid == ownerid) return true;
+
+            if (configData.useFriends && Friends != null)
+            {
+                object fr = Friends?.CallHook("AreFriends", playerid, ownerid);
+                if (fr != null && (bool)fr)
+                {
+                    return true;
+                }
+            }
+            if (configData.useClans && Clans != null)
+            {
+                string playerclan = (string)Clans?.CallHook("GetClanOf", playerid);
+                string ownerclan = (string)Clans?.CallHook("GetClanOf", ownerid);
+                if (playerclan != null && ownerclan != null && playerclan == ownerclan)
+                {
+                    return true;
+                }
+            }
+            if (configData.useTeams)
+            {
+                BasePlayer player = BasePlayer.FindByID(playerid);
+                if (player != null && player?.currentTeam != 0)
+                {
+                    RelationshipManager.PlayerTeam playerTeam = RelationshipManager.ServerInstance.FindTeam(player.currentTeam);
+                    if (playerTeam?.members.Contains(ownerid) == true)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
 
         private void Unload()
         {
@@ -1233,7 +1293,7 @@ namespace Oxide.Plugins
                 float monsize = Instance.monSize[currentMonument].z;
                 if (Vector3.Distance(current, target) <= monsize)
                 {
-                    Instance.DoLog($"Within {monsize.ToString()}m of {currentMonument}", true);
+                    Instance.DoLog($"Within {monsize}m of {currentMonument}", true);
                     carpet.lantern1.SetFlag(BaseEntity.Flags.On, false);
                     carpet.islanding = true;
                     enabled = false;
@@ -1330,7 +1390,7 @@ namespace Oxide.Plugins
             private bool DangerLeft(Vector3 tgt)
             {
                 RaycastHit hitinfo;
-                if (Physics.Raycast(current, carpet.transform.TransformDirection(Vector3.left), out hitinfo, 4f, buildingMask))
+                if (Physics.Raycast(tgt, carpet.transform.TransformDirection(Vector3.left), out hitinfo, 4f, buildingMask))
                 {
                     if (hitinfo.GetEntity() != carpet)
                     {
@@ -1355,7 +1415,7 @@ namespace Oxide.Plugins
             private bool DangerRight(Vector3 tgt)
             {
                 RaycastHit hitinfo;
-                if (Physics.Raycast(current, carpet.transform.TransformDirection(Vector3.right), out hitinfo, 4f, buildingMask))
+                if (Physics.Raycast(tgt, carpet.transform.TransformDirection(Vector3.right), out hitinfo, 4f, buildingMask))
                 {
                     if (hitinfo.GetEntity() != carpet)
                     {
@@ -1381,7 +1441,7 @@ namespace Oxide.Plugins
             {
                 // In case we get stuck under a building component, esp at OilRigs
                 RaycastHit hitinfo;
-                if (Physics.Raycast(current + carpet.transform.up, Vector3.up, out hitinfo, 2f, buildingMask) && hitinfo.GetEntity() != carpet)
+                if (Physics.Raycast(tgt + carpet.transform.up, Vector3.up, out hitinfo, 2f, buildingMask) && hitinfo.GetEntity() != carpet)
                 {
                     Instance.DoLog("CRASH ABOVE!", true);
                     return true;
@@ -1392,7 +1452,7 @@ namespace Oxide.Plugins
             private bool DangerFront(Vector3 tgt)
             {
                 RaycastHit hitinfo;
-                if (Physics.Raycast(current, carpet.transform.TransformDirection(Vector3.forward), out hitinfo, 10f, buildingMask))
+                if (Physics.Raycast(tgt, carpet.transform.TransformDirection(Vector3.forward), out hitinfo, 10f, buildingMask))
                 {
                     if (hitinfo.GetEntity() != carpet)
                     {
@@ -1418,7 +1478,7 @@ namespace Oxide.Plugins
             {
                 RaycastHit hitinfo;
                 int groundLayer = LayerMask.GetMask("Construction", "Terrain", "World", "Water");
-                if (Physics.Raycast(current, Vector3.down, out hitinfo, 10f, groundLayer) || Physics.Raycast(current, Vector3.up, out hitinfo, 10f, groundLayer))
+                if (Physics.Raycast(tgt, Vector3.down, out hitinfo, 10f, groundLayer) || Physics.Raycast(current, Vector3.up, out hitinfo, 10f, groundLayer))
                 {
                     if (hitinfo.GetEntity() != carpet)
                     {
@@ -1433,7 +1493,7 @@ namespace Oxide.Plugins
 
         private class CarpetEntity : MonoBehaviour
         {
-            public BaseEntity entity;
+            public BaseMountable entity;
             public BasePlayer player;
             public BaseEntity sitbox;
             public BaseEntity carpet1;
@@ -1485,7 +1545,7 @@ namespace Oxide.Plugins
 
             private void Awake()
             {
-                entity = GetComponentInParent<BaseEntity>();
+                entity = GetComponentInParent<BaseMountable>();
                 entityrot = Quaternion.identity;
                 entitypos = entity.transform.position;
                 minaltitude = Instance.configData.MinAltitude;
@@ -1524,7 +1584,7 @@ namespace Oxide.Plugins
                 sphereCollider = gameObject.AddComponent<SphereCollider>();
                 sphereCollider.gameObject.layer = (int)Layer.Reserved1;
                 sphereCollider.isTrigger = true;
-                sphereCollider.tag = "FlyingCarpet";
+                //sphereCollider.tag = "FlyingCarpet";
                 sphereCollider.radius = 6f;
 
                 nav = entity.gameObject.AddComponent<CarpetNav>();
@@ -1534,7 +1594,7 @@ namespace Oxide.Plugins
             {
                 if (Instance.configData.debug)
                 {
-                    Interface.Oxide.LogInfo($"SpawnPart: {prefab}, active:{setactive.ToString()}, angles:({eulangx.ToString()}, {eulangy.ToString()}, {eulangz.ToString()}), position:({locposx.ToString()}, {locposy.ToString()}, {locposz.ToString()}), parent:{parent.ShortPrefabName} skinid:{skinid.ToString()}");
+                    Interface.Oxide.LogInfo($"SpawnPart: {prefab}, active:{setactive}, angles:({eulangx}, {eulangy}, {eulangz}), position:({locposx}, {locposy}, {locposz}), parent:{parent.ShortPrefabName} skinid:{skinid}");
                 }
                 entitypart = GameManager.server.CreateEntity(prefab, entitypos, entityrot, setactive);
                 entitypart.transform.localEulerAngles = new Vector3(eulangx, eulangy, eulangz);
@@ -1548,7 +1608,7 @@ namespace Oxide.Plugins
                 return entitypart;
             }
 
-            public void RemoveComps(BaseEntity obj)
+            public static void RemoveComps(BaseEntity obj)
             {
                 DestroyImmediate(obj.GetComponent<DestroyOnGroundMissing>());
                 DestroyImmediate(obj.GetComponent<GroundWatch>());
@@ -1569,7 +1629,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            private void SpawnRefresh(BaseEntity entity)
+            private static void SpawnRefresh(BaseEntity entity)
             {
                 StabilityEntity hasstab = entity.GetComponent<StabilityEntity>();
                 if (hasstab != null)
@@ -1608,16 +1668,16 @@ namespace Oxide.Plugins
 
             public void SpawnCarpet()
             {
-                carpet1 = SpawnPart(prefabcarpet, carpet1, false, 0, 0, 0, 0f, 0.3f, 0f, entity, skinid);
+                carpet1 = SpawnPart(prefabcarpet, carpet1, false, 0, 0, 0, 0f, 0.05f, 0f, entity, skinid);
                 sitbox = SpawnPart(prefabbox, carpet1, false, 0, 90, 0, 0f, -0.2f, 0f, entity, Instance.configData.BoxSkinID);
-                lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, 0.33f, 1f, entity, 1);
+                lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, -0.01f, 1f, entity, 1);
                 lantern1.SetFlag(BaseEntity.Flags.On, false);
-                carpetlock = SpawnPart(prefablock, carpetlock, true, 0, 90, 90, 0.5f, 0.3f, 0.7f, entity, 1);
-                sign = SpawnPart(prefabsign, sign, true, -45, 0, 0, 0, 0.25f, 1.75f, entity, 1);
+                carpetlock = SpawnPart(prefablock, carpetlock, true, 0, 90, 90, 0.5f, 0.02f, 0.7f, entity, 1);
+                sign = SpawnPart(prefabsign, sign, true, -45, 0, 0, 0, -0.05f, 1.75f, entity, 1);
 
-                lights1 = SpawnPart(prefablights, lights1, true, 0, 90, 0, 0.8f, 0.31f, 0.1f, entity, 1);
+                lights1 = SpawnPart(prefablights, lights1, true, 0, 90, 0, 0.8f, -0.02f, 0.1f, entity, 1);
                 lights1.SetFlag(BaseEntity.Flags.Busy, true);
-                lights2 = SpawnPart(prefablights, lights2, true, 0, 90, 0, -0.9f, 0.31f, 0.1f, entity, 1);
+                lights2 = SpawnPart(prefablights, lights2, true, 0, 90, 0, -0.9f, -0.02f, 0.1f, entity, 1);
                 lights2.SetFlag(BaseEntity.Flags.Busy, true);
 
                 if (needfuel)
@@ -1776,7 +1836,7 @@ namespace Oxide.Plugins
                             entity.transform.localPosition += transform.up * -5f * Time.deltaTime;
                         }
 
-                        if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 1f, layerMask) && hit.collider?.name != "ZoneManager")
+                        if (Physics.Raycast(new Ray(entity.transform.position, Vector3.down), out hit, 0.5f, layerMask) && hit.collider?.name != "ZoneManager")
                         {
                             islanding = false;
                             engineon = false;
@@ -1802,11 +1862,14 @@ namespace Oxide.Plugins
                         // Disallow flying forward into buildings, etc.
                         if (Physics.Raycast(entity.transform.position, entity.transform.TransformDirection(Vector3.forward), out hit, 10f, buildingMask, QueryTriggerInteraction.Ignore))
                         {
-                            entity.transform.localPosition += transform.forward * -5f * Time.deltaTime;
-                            moveforward = false;
+                            if (hit.GetEntity() != sign)
+                            {
+                                entity.transform.localPosition += transform.forward * -5f * Time.deltaTime;
+                                moveforward = false;
 
-                            string d = Math.Round(hit.distance, 2).ToString();
-                            Instance.DoLog($"FRONTAL CRASH (distance {d}m)!", true);
+                                string d = Math.Round(hit.distance, 2).ToString();
+                                Instance.DoLog($"FRONTAL CRASH (distance {d}m)! with {hit.GetEntity().ShortPrefabName}", true);
+                            }
                         }
                         // Disallow flying backward into buildings, etc.
                         else if (Physics.Raycast(new Ray(entity.transform.position, Vector3.forward * -1f), out hit, 10f, buildingMask))
