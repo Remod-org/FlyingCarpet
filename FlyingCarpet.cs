@@ -35,7 +35,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.3.4")]
+    [Info("FlyingCarpet", "RFC1920", "1.3.5")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -470,7 +470,9 @@ namespace Oxide.Plugins
                 iscarpet.lantern1.SetFlag(BaseEntity.Flags.On, true);
                 iscarpet.engineon = true;
                 CuiHelper.DestroyUi(player, FCGUM);
-                ShowTopGUI(player, Lang("heading", null, monname));
+                //ShowTopGUI(player, Lang("heading", null, monname));
+                Interface.Oxide.CallHook("OnCarpetNavChange", player, monname);
+
                 player.SendConsoleCommand("ddraw.text", 90, Color.green, monPos[monname], $"<size=20>{monname}</size>");
 			}
 		}
@@ -515,7 +517,7 @@ namespace Oxide.Plugins
                 UI.Button(ref container, FCGUM, UI.Color("#d85540", 1f), moninfo, 10, $"{posb[0]} {posb[1]}", $"{posb[0] + ((posb[2] - posb[0]) / 2)} {posb[3]}", $"fcnav {player.userID} {mons.Key}", UI.Color("#ffffff", 1));
                 row++;
             }
-            row++;
+
             UI.Button(ref container, FCGUM, UI.Color("#ff0000", 1f), Lang("cancel"), 10, $"{posb[0]} {posb[1]}", $"{posb[0] + ((posb[2] - posb[0]) / 2)} {posb[3]}", "fcnav navcancel", UI.Color("#ffffff", 1));
 
             CuiHelper.AddUi(player, container);
@@ -943,7 +945,10 @@ namespace Oxide.Plugins
             if (PilotListContainsPlayer(player))
             {
                 CarpetEntity activecarpet = entity.GetComponentInParent<CarpetEntity>();
-                return !activecarpet.engineon ? null : (object)false;
+                if (activecarpet?.engineon == true)
+                {
+                    return false;
+                }
             }
             return null;
         }
@@ -1102,6 +1107,7 @@ namespace Oxide.Plugins
                 }
             }
         }
+
         private bool IsFriend(ulong playerid, ulong ownerid)
         {
             if (!configData.HonorRelationships) return true;
@@ -1139,7 +1145,6 @@ namespace Oxide.Plugins
             return false;
         }
 
-
         private void Unload()
         {
             DestroyAll<CarpetEntity>();
@@ -1170,17 +1175,13 @@ namespace Oxide.Plugins
 
         private void FindMonuments()
         {
-            Vector3 extents = Vector3.zero;
-            float realWidth = 0f;
-            string name = "";
-            string newname = "";
-
+            Vector3 extents;
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
                 if (monument.name.Contains("power_sub") || monument.name.Contains("derwater")) continue;
 
-                realWidth = 0f;
-                name = null;
+                float realWidth = 0f;
+                string name = null;
 
                 if (monument.name == "OilrigAI")
                 {
@@ -1199,8 +1200,7 @@ namespace Oxide.Plugins
                 if (monPos.ContainsKey(name))
                 {
                     if (monPos[name] == monument.transform.position) continue;
-
-                    newname = name.Remove(name.Length -1, 1) + "1";
+                    string newname = name.Remove(name.Length - 1, 1) + "1";
                     if (monPos.ContainsKey(newname))
                     {
                         newname = name.Remove(name.Length - 1, 1) + "2";
@@ -1300,15 +1300,16 @@ namespace Oxide.Plugins
                     paused = false;
                     carpet.autopilot = false;
 
-                    carpet.transform.rotation = Quaternion.identity; // Land flat
-                    Instance.OnCarpetNavArrived(carpet.player, currentMonument);
+                    //carpet.transform.rotation = Quaternion.identity; // Land flat
+                    //Instance.OnCarpetNavArrived(carpet.player, currentMonument);
+                    Interface.Oxide.CallHook("OnCarpetNavArrived", carpet.player, currentMonument);
                     return;
                 }
                 carpet.transform.LookAt(target);
-                DoMoveCarpet(direction);
+                DoMoveCarpet();// direction);
             }
 
-            private void DoMoveCarpet(Vector3 direction)
+            private void DoMoveCarpet()//Vector3 direction)
             {
                 if (paused) return;
                 InputMessage message = new InputMessage() { buttons = 0 };
@@ -1321,7 +1322,7 @@ namespace Oxide.Plugins
                 if (above)
                 {
                     // Move right to try to get around this crap
-                    Instance.DoLog($"Moving down and right to try to avoid...", true);
+                    Instance.DoLog("Moving down and right to try to avoid...", true);
                     message.buttons = 48;
                 }
                 if (current.y < target.y || (current.y - terrainHeight < 1.5f) || toolow || frontcrash)
@@ -1362,9 +1363,10 @@ namespace Oxide.Plugins
                     message.buttons += 130;
                 }
 
-                InputState input = new InputState() { current = message };
-
-                carpet.CarpetInput(input, player);
+                carpet.CarpetInput(new InputState()
+                {
+                    current = message
+                }, player);
 
                 last = carpet.transform.position;
             }
@@ -1390,23 +1392,19 @@ namespace Oxide.Plugins
             private bool DangerLeft(Vector3 tgt)
             {
                 RaycastHit hitinfo;
-                if (Physics.Raycast(tgt, carpet.transform.TransformDirection(Vector3.left), out hitinfo, 4f, buildingMask))
+                if (Physics.Raycast(tgt, carpet.transform.TransformDirection(Vector3.left), out hitinfo, 4f, buildingMask) && hitinfo.GetEntity() != carpet)
                 {
-                    if (hitinfo.GetEntity() != carpet)
+                    if (hitinfo.distance < 2) return false;
+                    try
                     {
-                        if (hitinfo.distance < 2) return false;
-                        string hit = null;
-                        try
-                        {
-                            hit = $" with {hitinfo.GetEntity().ShortPrefabName}";
-                            string d = Math.Round(hitinfo.distance, 2).ToString();
-                            Instance.DoLog($"CRASH LEFT{hit} distance {d}!", true);
-                            return true;
-                        }
-                        catch
-                        {
-                            return false;
-                        }
+                        string hit = $" with {hitinfo.GetEntity().ShortPrefabName}";
+                        string d = Math.Round(hitinfo.distance, 2).ToString();
+                        Instance.DoLog($"CRASH LEFT{hit} distance {d}!", true);
+                        return true;
+                    }
+                    catch
+                    {
+                        return false;
                     }
                 }
                 return false;
@@ -1415,23 +1413,19 @@ namespace Oxide.Plugins
             private bool DangerRight(Vector3 tgt)
             {
                 RaycastHit hitinfo;
-                if (Physics.Raycast(tgt, carpet.transform.TransformDirection(Vector3.right), out hitinfo, 4f, buildingMask))
+                if (Physics.Raycast(tgt, carpet.transform.TransformDirection(Vector3.right), out hitinfo, 4f, buildingMask) && hitinfo.GetEntity() != carpet)
                 {
-                    if (hitinfo.GetEntity() != carpet)
+                    if (hitinfo.distance < 2) return false;
+                    try
                     {
-                        if (hitinfo.distance < 2) return false;
-                        string hit = null;
-                        try
-                        {
-                            hit = $" with {hitinfo.GetEntity().ShortPrefabName}";
-                            string d = Math.Round(hitinfo.distance, 2).ToString();
-                            Instance.DoLog($"CRASH RIGHT{hit} distance {d}!", true);
-                            return true;
-                        }
-                        catch
-                        {
-                            return false;
-                        }
+                        string hit = $" with {hitinfo.GetEntity().ShortPrefabName}";
+                        string d = Math.Round(hitinfo.distance, 2).ToString();
+                        Instance.DoLog($"CRASH RIGHT{hit} distance {d}!", true);
+                        return true;
+                    }
+                    catch
+                    {
+                        return false;
                     }
                 }
                 return false;
@@ -1452,23 +1446,19 @@ namespace Oxide.Plugins
             private bool DangerFront(Vector3 tgt)
             {
                 RaycastHit hitinfo;
-                if (Physics.Raycast(tgt, carpet.transform.TransformDirection(Vector3.forward), out hitinfo, 10f, buildingMask))
+                if (Physics.Raycast(tgt, carpet.transform.TransformDirection(Vector3.forward), out hitinfo, 10f, buildingMask) && hitinfo.GetEntity() != carpet)
                 {
-                    if (hitinfo.GetEntity() != carpet)
+                    if (hitinfo.distance < 2) return false;
+                    try
                     {
-                        if (hitinfo.distance < 2) return false;
-                        string hit = null;
-                        try
-                        {
-                            hit = $" with {hitinfo.GetEntity().ShortPrefabName}";
-                            string d = Math.Round(hitinfo.distance, 2).ToString();
-                            Instance.DoLog($"FRONTAL CRASH{hit} distance {d}m!", true);
-                            return true;
-                        }
-                        catch
-                        {
-                            return false;
-                        }
+                        string hit = $" with {hitinfo.GetEntity().ShortPrefabName}";
+                        string d = Math.Round(hitinfo.distance, 2).ToString();
+                        Instance.DoLog($"FRONTAL CRASH{hit} distance {d}m!", true);
+                        return true;
+                    }
+                    catch
+                    {
+                        return false;
                     }
                 }
                 return false;
@@ -1497,7 +1487,6 @@ namespace Oxide.Plugins
             public BasePlayer player;
             public BaseEntity sitbox;
             public BaseEntity carpet1;
-            public BaseEntity carpet2;
             public BaseEntity lantern1;
             public BaseEntity carpetlock;
             public BaseEntity lights1;
@@ -1731,7 +1720,6 @@ namespace Oxide.Plugins
                 if (input == null) return;
                 if (player == null)
                 {
-                    player = this.player;
                     autopilot = true;
                 }
                 if (autopilot)
