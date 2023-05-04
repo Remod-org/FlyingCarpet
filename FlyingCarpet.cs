@@ -35,7 +35,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.3.5")]
+    [Info("FlyingCarpet", "RFC1920", "1.3.6")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -405,7 +405,7 @@ namespace Oxide.Plugins
                     Message(iplayer, "MultiplePlayers", target, string.Join(", ", players.Select(p => p.displayName).ToArray()));
                     return;
                 }
-                BasePlayer targetPlayer = players.First();
+                BasePlayer targetPlayer = players.FirstOrDefault();
                 RemoveCarpet(targetPlayer);
                 DestroyRemoteCarpet(targetPlayer);
                 CuiHelper.DestroyUi(targetPlayer, FCGUI);
@@ -1020,7 +1020,7 @@ namespace Oxide.Plugins
             string myparent = null;
             try
             {
-                BaseNetworkable myent = BaseNetworkable.serverEntities.Find(entityId);
+                BaseNetworkable myent = BaseNetworkable.serverEntities.Find(new NetworkableId(entityId));
                 myparent = myent.GetParentEntity().name;
                 Puts(myparent);
             }
@@ -1132,14 +1132,10 @@ namespace Oxide.Plugins
             }
             if (configData.useTeams)
             {
-                BasePlayer player = BasePlayer.FindByID(playerid);
-                if (player != null && player?.currentTeam != 0)
+                RelationshipManager.PlayerTeam playerTeam = RelationshipManager.ServerInstance.FindPlayersTeam(playerid);
+                if (playerTeam?.members.Contains(ownerid) == true)
                 {
-                    RelationshipManager.PlayerTeam playerTeam = RelationshipManager.ServerInstance.FindTeam(player.currentTeam);
-                    if (playerTeam?.members.Contains(ownerid) == true)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
             return false;
