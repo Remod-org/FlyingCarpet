@@ -35,7 +35,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.3.6")]
+    [Info("FlyingCarpet", "RFC1920", "1.3.7")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -1014,13 +1014,13 @@ namespace Oxide.Plugins
             return null;
         }
 
-        private object CanDeployItem(BasePlayer player, Deployer deployer, uint entityId)
+        private object CanDeployItem(BasePlayer player, Deployer deployer, NetworkableId entityId)
         {
-            if (entityId == 0 || player == null) return null;
+            if (entityId.Value == 0 || player == null) return null;
             string myparent = null;
             try
             {
-                BaseNetworkable myent = BaseNetworkable.serverEntities.Find(new NetworkableId(entityId));
+                BaseNetworkable myent = BaseNetworkable.serverEntities.Find(entityId);
                 myparent = myent.GetParentEntity().name;
                 Puts(myparent);
             }
