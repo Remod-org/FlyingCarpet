@@ -35,7 +35,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.3.7")]
+    [Info("FlyingCarpet", "RFC1920", "1.3.8")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -1171,14 +1171,12 @@ namespace Oxide.Plugins
 
         private void FindMonuments()
         {
-            Vector3 extents;
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
                 if (monument.name.Contains("power_sub") || monument.name.Contains("derwater")) continue;
 
                 float realWidth = 0f;
-                string name = null;
-
+                string name;
                 if (monument.name == "OilrigAI")
                 {
                     name = "Small Oilrig";
@@ -1188,6 +1186,11 @@ namespace Oxide.Plugins
                 {
                     name = "Large Oilrig";
                     realWidth = 200f;
+                }
+                else if (monument.name == "assets/bundled/prefabs/autospawn/monument/medium/radtown_small_3.prefab")
+                {
+                    name = "Sewer Branch";
+                    realWidth = 100;
                 }
                 else
                 {
@@ -1208,7 +1211,7 @@ namespace Oxide.Plugins
                     name = newname;
                 }
 
-                extents = monument.Bounds.extents;
+                Vector3 extents = monument.Bounds.extents;
                 if (realWidth > 0f)
                 {
                     extents.z = realWidth;
@@ -1514,7 +1517,6 @@ namespace Oxide.Plugins
             public ulong ownerid;
             private float minaltitude;
             private float cruisealtitude;
-            private FlyingCarpet instance;
             public bool throttleup;
             public bool showmenu;
             private float sprintspeed;
@@ -1535,7 +1537,6 @@ namespace Oxide.Plugins
                 entitypos = entity.transform.position;
                 minaltitude = Instance.configData.MinAltitude;
                 cruisealtitude = Instance.configData.CruiseAltitude;
-                instance = new FlyingCarpet();
                 ownerid = entity.OwnerID;
                 gameObject.name = "FlyingCarpet";
 
@@ -1776,7 +1777,7 @@ namespace Oxide.Plugins
                 engineon = true;
                 sphereCollider.enabled = false;
                 Instance.DoLog("sphereCollider disabled for engine start");
-                instance.timer.Once(2, EngineStarted);
+                Instance.timer.Once(2, EngineStarted);
             }
 
             private void EngineStarted()
