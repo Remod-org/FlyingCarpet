@@ -35,7 +35,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.3.8")]
+    [Info("FlyingCarpet", "RFC1920", "1.3.9")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -1194,8 +1194,9 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize() + " 0";
+                    name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();// + " 0";
                 }
+                if (name.Length == 0) continue;
                 if (monPos.ContainsKey(name))
                 {
                     if (monPos[name] == monument.transform.position) continue;
