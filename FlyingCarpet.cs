@@ -21,21 +21,21 @@
 */
 #endregion License (GPL v2)
 using Oxide.Core;
+using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
+using Rust;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
-using Rust;
-using System.Linq;
-using Oxide.Core.Libraries.Covalence;
 using System.Globalization;
-using Oxide.Core.Plugins;
+using System.Linq;
 using System.Text.RegularExpressions;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.3.9")]
+    [Info("FlyingCarpet", "RFC1920", "1.4.0")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -48,7 +48,7 @@ namespace Oxide.Plugins
         private static List<ulong> pilotslist = new List<ulong>();
 
         public List<string> monNames = new List<string>();
-        public SortedDictionary<string, Vector3> monPos  = new SortedDictionary<string, Vector3>();
+        public SortedDictionary<string, Vector3> monPos = new SortedDictionary<string, Vector3>();
         public SortedDictionary<string, Vector3> monSize = new SortedDictionary<string, Vector3>();
 
         private const string FCGUI = "fcgui.top";
@@ -453,29 +453,28 @@ namespace Oxide.Plugins
                 return;
             }
 
-			Vector3 target = new Vector3();
-			string monname = null;
+            string monname = null;
             for (int i = 1; i < args.Length; i++)
             {
                 monname += args[i] + " ";
-			}
-			monname = monname.Trim();
-            Puts($"Flying from {player.transform.position} to {target}");
+            }
+            monname = monname.Trim();
+            Vector3 target = monPos[monname];
+            DoLog($"Flying from {player.transform.position} to {monname}@{target}");
 
             if (iscarpet != null)
-			{
+            {
                 iscarpet.nav.currentMonument = monname;
                 iscarpet.nav.enabled = true;
                 iscarpet.nav.paused = false;
                 iscarpet.lantern1.SetFlag(BaseEntity.Flags.On, true);
                 iscarpet.engineon = true;
                 CuiHelper.DestroyUi(player, FCGUM);
-                //ShowTopGUI(player, Lang("heading", null, monname));
-                Interface.Oxide.CallHook("OnCarpetNavChange", player, monname);
+                Interface.GetMod().CallHook("OnCarpetNavChange", player, monname);
 
                 player.SendConsoleCommand("ddraw.text", 90, Color.green, monPos[monname], $"<size=20>{monname}</size>");
-			}
-		}
+            }
+        }
         #endregion
 
         #region GUI
@@ -545,6 +544,7 @@ namespace Oxide.Plugins
         #region our_hooks
         private object OnCarpetNavChange(BasePlayer pl, string newdirection)
         {
+            DoLog("OnCarpetNavChange");
             ShowTopGUI(pl, Lang("heading", null, newdirection));
             return null;
         }
@@ -699,7 +699,7 @@ namespace Oxide.Plugins
         private void DoLog(string message, bool ismovement = false)
         {
             if (ismovement && !configData.debugMovement) return;
-            if (configData.debugMovement || configData.debug) Interface.Oxide.LogInfo(message);
+            if (configData.debugMovement || configData.debug) Interface.GetMod().LogInfo(message);
         }
 
         private void AddCarpet(BasePlayer player, Vector3 location)
@@ -843,7 +843,7 @@ namespace Oxide.Plugins
         private void DestroyAllCarpets(BasePlayer player)
         {
             List<BaseEntity> carpetlist = new List<BaseEntity>();
-            Vis.Entities(new Vector3(0,0,0), 3500f, carpetlist);
+            Vis.Entities(new Vector3(0, 0, 0), 3500f, carpetlist);
             bool foundcarpet = false;
 
             foreach (BaseEntity p in carpetlist)
@@ -866,7 +866,7 @@ namespace Oxide.Plugins
         {
             if (player == null) return;
             List<BaseEntity> carpetlist = new List<BaseEntity>();
-            Vis.Entities(new Vector3(0,0,0), 3500f, carpetlist);
+            Vis.Entities(new Vector3(0, 0, 0), 3500f, carpetlist);
             bool foundcarpet = false;
 
             foreach (BaseEntity p in carpetlist)
@@ -892,12 +892,8 @@ namespace Oxide.Plugins
             if (!player.isMounted) return;
 
             CarpetEntity activecarpet = player.GetMounted().GetComponentInParent<CarpetEntity>();
-            if (activecarpet == null) return;
-            if (player.GetMounted() != activecarpet.entity) return;
-            if (input != null)
-            {
-                activecarpet.CarpetInput(input, player);
-            }
+            if (player?.GetMounted() != activecarpet?.entity) return;
+            activecarpet?.CarpetInput(input, player);
         }
 
         private void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
@@ -914,7 +910,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        private bool CarpetLimitReached(BasePlayer player, bool vip=false)
+        private bool CarpetLimitReached(BasePlayer player, bool vip = false)
         {
             if (configData.UseMaxCarpetChecks && loadplayer.ContainsKey(player.userID))
             {
@@ -1024,7 +1020,7 @@ namespace Oxide.Plugins
                 myparent = myent.GetParentEntity().name;
                 Puts(myparent);
             }
-            catch {}
+            catch { }
 
             if (myparent == "FlyingCarpet")
             {
@@ -1046,7 +1042,7 @@ namespace Oxide.Plugins
             {
                 myparent = myent.GetParentEntity().name;
             }
-            catch {}
+            catch { }
 
             if (myparent == "FlyingCarpet")
             {
@@ -1155,7 +1151,7 @@ namespace Oxide.Plugins
         {
             if (GridAPI != null)
             {
-                string[] g = (string[]) GridAPI.CallHook("GetGrid", position);
+                string[] g = (string[])GridAPI.CallHook("GetGrid", position);
                 return string.Concat(g);
             }
             else
@@ -1223,7 +1219,7 @@ namespace Oxide.Plugins
                 }
                 monPos.Add(name.Trim(), monument.transform.position);
                 monSize.Add(name.Trim(), extents);
-                //DoLog($"Found monument {name} at {monument.transform.position.ToString()}");
+                Puts($"Found monument {name} at {monument.transform.position.ToString()}");
             }
         }
         #endregion
@@ -1288,10 +1284,10 @@ namespace Oxide.Plugins
                 target = new Vector3(Instance.monPos[currentMonument].x, GetHeight(Instance.monPos[currentMonument]), Instance.monPos[currentMonument].z);
 
                 direction = (target - current).normalized;
-                Quaternion lookrotation = Quaternion.LookRotation(direction);
+                //Quaternion lookrotation = Quaternion.LookRotation(direction);
 
                 float monsize = Instance.monSize[currentMonument].z;
-                if (Vector3.Distance(current, target) <= monsize)
+                if (Vector3.Distance(current, target) < monsize)
                 {
                     Instance.DoLog($"Within {monsize}m of {currentMonument}", true);
                     carpet.lantern1.SetFlag(BaseEntity.Flags.On, false);
@@ -1302,7 +1298,7 @@ namespace Oxide.Plugins
 
                     //carpet.transform.rotation = Quaternion.identity; // Land flat
                     //Instance.OnCarpetNavArrived(carpet.player, currentMonument);
-                    Interface.Oxide.CallHook("OnCarpetNavArrived", carpet.player, currentMonument);
+                    Interface.GetMod().CallHook("OnCarpetNavArrived", carpet.player, currentMonument);
                     return;
                 }
                 carpet.transform.LookAt(target);
@@ -1581,7 +1577,7 @@ namespace Oxide.Plugins
             {
                 if (Instance.configData.debug)
                 {
-                    Interface.Oxide.LogInfo($"SpawnPart: {prefab}, active:{setactive}, angles:({eulangx}, {eulangy}, {eulangz}), position:({locposx}, {locposy}, {locposz}), parent:{parent.ShortPrefabName} skinid:{skinid}");
+                    Interface.GetMod().LogInfo($"SpawnPart: {prefab}, active:{setactive}, angles:({eulangx}, {eulangy}, {eulangz}), position:({locposx}, {locposy}, {locposz}), parent:{parent.ShortPrefabName} skinid:{skinid}");
                 }
                 entitypart = GameManager.server.CreateEntity(prefab, entitypos, entityrot, setactive);
                 entitypart.transform.localEulerAngles = new Vector3(eulangx, eulangy, eulangz);
@@ -1979,7 +1975,8 @@ namespace Oxide.Plugins
                             Command = command + text,
                             FontSize = size,
                             IsPassword = false,
-                            Text = text
+                            Text = text,
+                            NeedsKeyboard = true
                         },
                         new CuiRectTransformComponent { AnchorMin = min, AnchorMax = max },
                         new CuiNeedsCursorComponent()
