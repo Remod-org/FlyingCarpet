@@ -11,6 +11,8 @@ For the default mode, the user will receive notification via chat message as wel
 
 It is recommended that you use this in conjunction with https://github.com/WheteThunger/ParentedEntityRenderFix until such time that Facepunch fixes the culling issue impacting plugins built from multiple parented objects.  I would not hold my breath that they will since this was likely done for overall performance and suits vanilla just fine.  See more below.
 
+NEW FOR March 2025: If you use Teleportication, the server TP locations will be added to the Flying Carpet nav menu.
+
 ## Permissions
 
 * flyingcarpet.use -- Allows player to spawn and fly a carpet using low grade fuel

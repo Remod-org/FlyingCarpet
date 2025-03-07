@@ -20,6 +20,7 @@
     Optionally you can also view the license at <http://www.gnu.org/licenses/>.
 */
 #endregion License (GPL v2)
+using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
@@ -35,7 +36,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("FlyingCarpet", "RFC1920", "1.4.0")]
+    [Info("FlyingCarpet", "RFC1920", "1.4.1")]
     [Description("Fly a custom object consisting of carpet, chair, lantern, lock, and small sign.")]
     internal class FlyingCarpet : RustPlugin
     {
@@ -44,19 +45,19 @@ namespace Oxide.Plugins
         private static LayerMask layerMask;
         private static LayerMask buildingMask;
 
-        private static Dictionary<ulong, PlayerCarpetData> loadplayer = new Dictionary<ulong, PlayerCarpetData>();
-        private static List<ulong> pilotslist = new List<ulong>();
+        private static Dictionary<ulong, PlayerCarpetData> loadplayer = new();
+        private static List<ulong> pilotslist = new();
 
-        public List<string> monNames = new List<string>();
-        public SortedDictionary<string, Vector3> monPos = new SortedDictionary<string, Vector3>();
-        public SortedDictionary<string, Vector3> monSize = new SortedDictionary<string, Vector3>();
+        public List<string> monNames = new();
+        public SortedDictionary<string, Vector3> monPos = new();
+        public SortedDictionary<string, Vector3> monSize = new();
 
         private const string FCGUI = "fcgui.top";
         private const string FCGUM = "fcgui.menu";
         public static FlyingCarpet Instance;
 
         [PluginReference]
-        private readonly Plugin SignArtist, GridAPI, Friends, Clans;
+        private readonly Plugin SignArtist, GridAPI, Friends, Clans, Teleportication;
 
         public class PlayerCarpetData
         {
@@ -121,6 +122,7 @@ namespace Oxide.Plugins
                 ["gaveplayer"] = "Gave carpet to player {0}!",
                 ["lowfuel"] = "You're low on fuel !!",
                 ["flyingcarpet"] = "Flying Carpet",
+                ["fcmenu"] = "Flying Carpet Menu",
                 ["menu"] = "Press RELOAD for menu",
                 ["close"] = "Close",
                 ["cancel"] = "Cancel",
@@ -146,9 +148,10 @@ namespace Oxide.Plugins
 
         private static HashSet<BasePlayer> FindPlayers(string nameOrIdOrIp)
         {
-            HashSet<BasePlayer> players = new HashSet<BasePlayer>();
+            HashSet<BasePlayer> players = new();
             if (string.IsNullOrEmpty(nameOrIdOrIp)) return players;
-            foreach (BasePlayer activePlayer in BasePlayer.activePlayerList)
+            //foreach (BasePlayer activePlayer in BasePlayer.activePlayerList)
+            foreach (BasePlayer activePlayer in BasePlayer.allPlayerList)
             {
                 if (activePlayer.UserIDString.Equals(nameOrIdOrIp))
                 {
@@ -163,17 +166,17 @@ namespace Oxide.Plugins
                     players.Add(activePlayer);
                 }
             }
-            foreach (BasePlayer sleepingPlayer in BasePlayer.sleepingPlayerList)
-            {
-                if (sleepingPlayer.UserIDString.Equals(nameOrIdOrIp))
-                {
-                    players.Add(sleepingPlayer);
-                }
-                else if (!string.IsNullOrEmpty(sleepingPlayer.displayName) && sleepingPlayer.displayName.Contains(nameOrIdOrIp, CompareOptions.IgnoreCase))
-                {
-                    players.Add(sleepingPlayer);
-                }
-            }
+            //foreach (BasePlayer sleepingPlayer in BasePlayer.sleepingPlayerList)
+            //{
+            //    if (sleepingPlayer.UserIDString.Equals(nameOrIdOrIp))
+            //    {
+            //        players.Add(sleepingPlayer);
+            //    }
+            //    else if (!string.IsNullOrEmpty(sleepingPlayer.displayName) && sleepingPlayer.displayName.Contains(nameOrIdOrIp, CompareOptions.IgnoreCase))
+            //    {
+            //        players.Add(sleepingPlayer);
+            //    }
+            //}
             return players;
         }
         #endregion
@@ -182,7 +185,7 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig()
         {
             Puts("Creating new config file.");
-            ConfigData config = new ConfigData
+            ConfigData config = new()
             {
                 BlockInTunnel = true,
                 AllowLantern = false,
@@ -190,6 +193,7 @@ namespace Oxide.Plugins
                 UseMaxCarpetChecks = true,
                 DoubleFuel = false,
                 NameOnSign = true,
+                UseSign = true,
                 PlayEmptySound = false,
                 RequireFuel = true,
                 debug = false,
@@ -230,6 +234,7 @@ namespace Oxide.Plugins
             public bool UseMaxCarpetChecks;
             public bool DoubleFuel;
             public bool NameOnSign;
+            public bool UseSign;
             public bool PlayEmptySound;
             public bool RequireFuel;
             public bool debug;
@@ -496,7 +501,7 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, FCGUM);
 
             CuiElementContainer container = UI.Container(FCGUM, UI.Color("222222", 0.9f), "0.2 0.2", "0.8 0.8", true, "Overlay");
-            UI.Label(ref container, FCGUM, UI.Color("#ffffff", 1f), "Flying Carpet Menu", 16, "0 0.92", "0.9 0.99");
+            UI.Label(ref container, FCGUM, UI.Color("#ffffff", 1f), Lang("fcmenu"), 16, "0 0.92", "0.9 0.99");
             UI.Button(ref container, FCGUM, UI.Color("#d85540", 1f), Lang("close"), 12, "0.92 0.93", "0.99 0.99", "fcnav navclose", UI.Color("#ffffff", 1));
 
             int row = 0;
@@ -547,6 +552,25 @@ namespace Oxide.Plugins
             DoLog("OnCarpetNavChange");
             ShowTopGUI(pl, Lang("heading", null, newdirection));
             return null;
+        }
+
+        public static Vector3 StringToVector3(string sVector)
+        {
+            // Remove the parentheses
+            if (sVector.StartsWith("(") && sVector.EndsWith(")"))
+            {
+                sVector = sVector.Substring(1, sVector.Length - 2);
+            }
+
+            // split the items
+            string[] sArray = sVector.Split(',');
+
+            // return as a Vector3
+            return new Vector3(
+                float.Parse(sArray[0]),
+                float.Parse(sArray[1]),
+                float.Parse(sArray[2])
+            );
         }
 
         private object OnCarpetNavArrived(BasePlayer pl, string newdirection)
@@ -706,7 +730,7 @@ namespace Oxide.Plugins
         {
             if (player == null && location == default(Vector3)) return;
             if (location == default(Vector3) && player != null) location = player.transform.position;
-            Vector3 spawnpos = new Vector3();
+            Vector3 spawnpos = new();
 
             Quaternion rotation = player.GetNetworkRotation();
             Vector3 forward = rotation * Vector3.forward;
@@ -762,7 +786,7 @@ namespace Oxide.Plugins
             }
 
             // paint sign with username
-            if (SignArtist && configData.NameOnSign)
+            if (SignArtist && configData.UseSign && configData.NameOnSign)
             {
                 // This only works with version 1.1.7 on
                 if (SignArtist.Version >= new VersionNumber(1, 1, 7))
@@ -772,11 +796,11 @@ namespace Oxide.Plugins
                     SignArtist?.Call("API_SignText", player, carpet.sign, message, fontsize, "00FF00", "000000");
                 }
             }
-            if (!configData.AllowRepaint)
+            if (configData.UseSign && !configData.AllowRepaint)
             {
                 carpet.sign.SetFlag(BaseEntity.Flags.Busy, true);
             }
-            carpet.sign.SetFlag(BaseEntity.Flags.Locked, true);
+            if (configData.UseSign) carpet.sign.SetFlag(BaseEntity.Flags.Locked, true);
 
             AddPlayerID(player.userID);
 
@@ -819,7 +843,7 @@ namespace Oxide.Plugins
         private void DestroyLocalCarpet(BasePlayer player)
         {
             if (player == null) return;
-            List<BaseEntity> carpetlist = new List<BaseEntity>();
+            List<BaseEntity> carpetlist = new();
             Vis.Entities(player.transform.position, configData.MinDistance, carpetlist);
             bool foundcarpet = false;
 
@@ -842,7 +866,7 @@ namespace Oxide.Plugins
 
         private void DestroyAllCarpets(BasePlayer player)
         {
-            List<BaseEntity> carpetlist = new List<BaseEntity>();
+            List<BaseEntity> carpetlist = new();
             Vis.Entities(new Vector3(0, 0, 0), 3500f, carpetlist);
             bool foundcarpet = false;
 
@@ -865,7 +889,7 @@ namespace Oxide.Plugins
         private void DestroyRemoteCarpet(BasePlayer player)
         {
             if (player == null) return;
-            List<BaseEntity> carpetlist = new List<BaseEntity>();
+            List<BaseEntity> carpetlist = new();
             Vis.Entities(new Vector3(0, 0, 0), 3500f, carpetlist);
             bool foundcarpet = false;
 
@@ -957,7 +981,7 @@ namespace Oxide.Plugins
                 DoLog("OnEntityMounted: player mounted copter!");
                 if (mountable.GetComponent<BaseEntity>() != activecarpet.entity) return;
                 activecarpet.lantern1.SetFlag(BaseEntity.Flags.On, false);
-                activecarpet.sign.SetFlag(BaseEntity.Flags.Busy, true);
+                activecarpet.sign?.SetFlag(BaseEntity.Flags.Busy, true);
                 ShowTopGUI(player);
             }
         }
@@ -970,7 +994,7 @@ namespace Oxide.Plugins
                 DoLog("OnEntityMounted: player dismounted copter!");
                 CuiHelper.DestroyUi(player, FCGUI);
                 if (mountable.GetComponent<BaseEntity>() != activecarpet.entity) return;
-                activecarpet.sign.SetFlag(BaseEntity.Flags.Busy, false);
+                activecarpet.sign?.SetFlag(BaseEntity.Flags.Busy, false);
             }
         }
 
@@ -1157,7 +1181,7 @@ namespace Oxide.Plugins
             else
             {
                 // From GrTeleport for display only
-                Vector2 r = new Vector2((World.Size / 2) + position.x, (World.Size / 2) + position.z);
+                Vector2 r = new((World.Size / 2) + position.x, (World.Size / 2) + position.z);
                 float x = Mathf.Floor(r.x / 146.3f) % 26;
                 float z = Mathf.Floor(World.Size / 146.3f) - Mathf.Floor(r.y / 146.3f);
 
@@ -1221,11 +1245,36 @@ namespace Oxide.Plugins
                 monSize.Add(name.Trim(), extents);
                 Puts($"Found monument {name} at {monument.transform.position.ToString()}");
             }
+
+            if (Teleportication != null)
+            {
+                object servertp = Teleportication?.Call("GetAllServerTp");
+                string stp = JsonConvert.SerializeObject(servertp);
+                Dictionary<string, Vector3> targets = JsonConvert.DeserializeObject<Dictionary<string, Vector3>>(stp);
+                if (targets != null)
+                {
+                    foreach (KeyValuePair<string, Vector3> target in targets)
+                    {
+                        string tpname = target.Key;
+                        try
+                        {
+                            tpname = char.ToUpper(target.Key[0]) + target.Key.Substring(1);
+                        }
+                        catch { }
+
+                        if (!monPos.ContainsKey(tpname))
+                        {
+                            monPos.Add(tpname, target.Value);
+                            monSize.Add(tpname, new Vector3(0, 0, 25f));
+                        }
+                    }
+                }
+            }
         }
         #endregion
 
         #region Carpet Antihack check
-        private static List<BasePlayer> carpetantihack = new List<BasePlayer>();
+        private static List<BasePlayer> carpetantihack = new();
 
         private object OnPlayerViolation(BasePlayer player, AntiHackType type, float amount)
         {
@@ -1252,7 +1301,7 @@ namespace Oxide.Plugins
             public static Vector3 direction;
             public Vector3 target = Vector3.zero;
             public static Vector3 last = Vector3.zero;
-            public static GameObject slop = new GameObject();
+            public static GameObject slop = new();
 
             public int whichPoint;
             public int totalPoints;
@@ -1308,7 +1357,7 @@ namespace Oxide.Plugins
             private void DoMoveCarpet()//Vector3 direction)
             {
                 if (paused) return;
-                InputMessage message = new InputMessage() { buttons = 0 };
+                InputMessage message = new() { buttons = 0 };
 
                 bool toolow = TooLow(current);
                 bool above = DangerAbove(current);
@@ -1330,7 +1379,7 @@ namespace Oxide.Plugins
                         message.buttons = 32;
                     }
                 }
-                else if (current.y > terrainHeight + (Instance.configData.CruiseAltitude * 2) + 5 && !frontcrash)
+                else if (current.y > terrainHeight + (carpet.cruisealtitude * 2) + 5 && !frontcrash)
                 {
                     if (!above)
                     {
@@ -1370,14 +1419,14 @@ namespace Oxide.Plugins
             private float GetHeight(Vector3 tgt)
             {
                 float terrainHeight = TerrainMeta.HeightMap.GetHeight(tgt);
-                float targetHeight = terrainHeight + Instance.configData.CruiseAltitude;
+                float targetHeight = terrainHeight + carpet.cruisealtitude;
 
                 RaycastHit hitinfo;
                 if (Physics.Raycast(current, Vector3.down, out hitinfo, 100f, LayerMask.GetMask("Water")))
                 {
                     if (TerrainMeta.WaterMap.GetHeight(hitinfo.point) < terrainHeight)
                     {
-                        targetHeight = TerrainMeta.WaterMap.GetHeight(tgt) + Instance.configData.CruiseAltitude;
+                        targetHeight = TerrainMeta.WaterMap.GetHeight(tgt) + carpet.cruisealtitude;
                     }
                 }
 
@@ -1511,9 +1560,10 @@ namespace Oxide.Plugins
             public bool needfuel;
 
             public ulong skinid = 1;
+            public ulong boxskinid = 1;
             public ulong ownerid;
             private float minaltitude;
-            private float cruisealtitude;
+            public float cruisealtitude;
             public bool throttleup;
             public bool showmenu;
             private float sprintspeed;
@@ -1559,10 +1609,11 @@ namespace Oxide.Plugins
                 sprintspeed = Instance.configData.SprintSpeed;
                 normalspeed = Instance.configData.NormalSpeed;
                 skinid = Instance.configData.RugSkinID;
+                boxskinid = Instance.configData.BoxSkinID;
                 SpawnCarpet();
 
                 lantern1.OwnerID = entity.OwnerID;
-                sign.OwnerID = entity.OwnerID;
+                if (Instance.configData.UseSign) sign.OwnerID = entity.OwnerID;
 
                 sphereCollider = gameObject.AddComponent<SphereCollider>();
                 sphereCollider.gameObject.layer = (int)Layer.Reserved1;
@@ -1652,11 +1703,11 @@ namespace Oxide.Plugins
             public void SpawnCarpet()
             {
                 carpet1 = SpawnPart(prefabcarpet, carpet1, false, 0, 0, 0, 0f, 0.05f, 0f, entity, skinid);
-                sitbox = SpawnPart(prefabbox, carpet1, false, 0, 90, 0, 0f, -0.2f, 0f, entity, Instance.configData.BoxSkinID);
+                sitbox = SpawnPart(prefabbox, carpet1, false, 0, 90, 0, 0f, -0.2f, 0f, entity, boxskinid);
                 lantern1 = SpawnPart(prefablamp, lantern1, true, 0, 0, 0, 0f, -0.01f, 1f, entity, 1);
                 lantern1.SetFlag(BaseEntity.Flags.On, false);
                 carpetlock = SpawnPart(prefablock, carpetlock, true, 0, 90, 90, 0.5f, 0.02f, 0.7f, entity, 1);
-                sign = SpawnPart(prefabsign, sign, true, -45, 0, 0, 0, -0.05f, 1.75f, entity, 1);
+                if (Instance.configData.UseSign) sign = SpawnPart(prefabsign, sign, true, -45, 0, 0, 0, -0.05f, 1.75f, entity, 1);
 
                 lights1 = SpawnPart(prefablights, lights1, true, 0, 90, 0, 0.8f, -0.02f, 0.1f, entity, 1);
                 lights1.SetFlag(BaseEntity.Flags.Busy, true);
@@ -1791,6 +1842,7 @@ namespace Oxide.Plugins
                     Instance.ShowMenuGUI(GetPilot());
                     return;
                 }
+
                 if (engineon)
                 {
                     if (!GetPilot()) islanding = true;
