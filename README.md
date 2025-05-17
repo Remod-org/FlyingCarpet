@@ -38,6 +38,7 @@ Of course, you could grant, for example, unlimited use to all players:
 * /fcd -- Despawn a flying carpet (must be within 10 meters of the carpet)
 * /fcc -- List the current number of carpets (Only useful if limit set higher than 1 per user)
 * /fchelp -- List the available commands (above)
+* /fcadmin debug -- Toggle debug
 
 ## Configuration
 Configuration is done via the FlyingCarpet.json file under the oxide/config directory.  Following is the default:
@@ -60,8 +61,8 @@ Configuration is done via the FlyingCarpet.json file under the oxide/config dire
   "RugSkinID": 871503616,
   "Version": {
     "Major": 1,
-    "Minor": 1,
-    "Patch": 7
+    "Minor": 4,
+    "Patch": 2
   }
 }
 ```
